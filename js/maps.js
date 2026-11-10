@@ -294,6 +294,12 @@ const Maps = {
     sun.shadow.camera.far = 130;
     sun.shadow.bias = -0.0005;
     root.add(sun);
+    // Relleno cálido desde el interior de la arena hacia la puerta principal:
+    // el arch.glb mira a -z (de cara al jugador) y el sol queda a sus espaldas;
+    // sin esta luz la cara del arco se ve casi negra de frente. Sin sombras.
+    const archFill = new THREE.DirectionalLight('#ffd9a8', 0.65);
+    archFill.position.set(0, 11, -30); // brilla hacia +z (dirección por defecto hacia el origen)
+    root.add(archFill);
 
     scene.add(root);
 
