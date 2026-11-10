@@ -10,15 +10,21 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <!-- Three.js fijado a la versión 0.160.0 (build UMD, global THREE).
-       Si unpkg falla, cambiar esta única línea por el espejo de jsDelivr:
-       https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js
-       (verificado 200 en ambos el 2026-11-10). No usar file:// ni módulos ES.
-       Se carga con `defer` para no bloquear el parser; un watchdog inline
-       (8 s) muestra el error en español si el CDN cuelga sin responder. -->
+  <!-- Three.js r160 fijado (build de módulos ES + import map; el build UMD
+       three.min.js ya no se publica desde r150 y se elimina en r160).
+       Si unpkg falla, cambiar el import map por el espejo de jsDelivr:
+       https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js
+       https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/
+       (ambos verificados 200 en unpkg y jsDelivr el 2026-11-10). No usar file://.
+       GLTFLoader se importa desde three/addons/loaders/GLTFLoader.js, misma versión 0.160.0.
+       Un watchdog inline (8 s, no módulo) muestra el error en español si el CDN cuelga;
+       el módulo js/main.js pone window.__threeOk = true al importar con éxito. -->
+  <script type="importmap">
+    {"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+  </script>
   <script>
     window.__engineWatchdog = setTimeout(function () {
-      if (window.__engineReady) return;
+      if (window.__threeOk) return;
       var msg = 'No se pudo cargar el motor 3D: la conexión con el CDN está tardando demasiado. Revisa tu conexión a internet y recarga la página.';
       var box = document.getElementById('webgl-error');
       if (box) {
@@ -38,7 +44,6 @@
       }
     }, 8000);
   </script>
-  <script defer src="https://unpkg.com/three@0.160.0/build/three.min.js" onerror="window.__threeLoadFailed = true"></script>
 </head>
 <body>
 
@@ -172,6 +177,7 @@
 
     <!-- HUD de juego -->
     <div id="hud" class="screen" aria-label="Interfaz de juego">
+      <canvas id="game-canvas" class="hidden" aria-hidden="true"></canvas>
       <div class="hud-top-left">
         <div class="hud-label">HP</div>
         <div class="hp-bar" role="progressbar" aria-label="Vida" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
@@ -193,6 +199,6 @@
   </main>
 
   <script defer src="js/ui.js"></script>
-  <script defer src="js/main.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

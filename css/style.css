@@ -268,6 +268,13 @@ body {
 /* ============ HUD ============ */
 #hud { justify-content: stretch; align-items: stretch; pointer-events: none; }
 #hud .hud-back { pointer-events: auto; }
+#game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 
 .hud-top-left {
   position: absolute;

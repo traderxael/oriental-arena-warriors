@@ -3,7 +3,19 @@
    Estados (global `state`):
      TITLE | MODE | HERO | MAP | PLAY | PAUSE | GAMEOVER
    La navegación entre pantallas se hace siempre vía ui.showScreen(id).
+   Módulo ES: importa THREE desde el CDN fijado a 0.160.0 (import map
+   de index.html). ui.js y logic.js siguen siendo scripts clásicos
+   cargados antes que este módulo.
    ============================================================ */
+import * as THREE from 'three';
+import { Assets } from './assets.js';
+import { Maps } from './maps.js';
+
+// Expone THREE para consola/depuración y para que checkEngine()
+// y el resto del código clásico puedan inspeccionar la versión.
+window.THREE = THREE;
+// Señal al watchdog inline (non-module) de que el motor cargó.
+window.__threeOk = true;
 
 var state = 'TITLE';
 
@@ -53,14 +65,15 @@ function showFatalError(detail) {
 }
 
 function checkEngine() {
-  // 1) ¿Cargó el script de Three.js desde la CDN?
-  if (window.__threeLoadFailed || typeof window.THREE === 'undefined') {
+  // 1) ¿Importó el módulo de Three.js desde la CDN? (si no, este módulo no llega a ejecutarse
+  //    y el watchdog inline muestra el error genérico)
+  if (!THREE || typeof THREE.REVISION !== 'string') {
     showFatalError('No se pudo cargar el motor 3D desde la red (CDN de Three.js). Revisa tu conexión a internet y recarga la página.');
     return false;
   }
   // 2) ¿Versión desalineada con la fijada en index.html?
-  if (window.THREE.REVISION !== '160') {
-    showFatalError('No se pudo cargar el motor 3D: se esperaba Three.js r160 y se cargó r' + window.THREE.REVISION + '. Recarga la página o avisa al equipo.');
+  if (THREE.REVISION !== '160') {
+    showFatalError('No se pudo cargar el motor 3D: se esperaba Three.js r160 y se cargó r' + THREE.REVISION + '. Recarga la página o avisa al equipo.');
     return false;
   }
   // 3) ¿WebGL disponible en este navegador/equipo?
@@ -86,6 +99,109 @@ function markEngineReady() {
   }
 }
 
+/* ---------- Arena 3D: Coliseo (Task 3) ---------- */
+
+let arena = null;        // { scene, camera, renderer, flames, flickerLights, rafId, orbitAngle }
+let arenaClock = null;
+
+function startArena() {
+  const canvas = document.getElementById('game-canvas');
+  if (!canvas) return;
+
+  if (!arena) {
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#efd9a7');
+    scene.fog = new THREE.Fog('#efd9a7', 90, 240);
+
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400);
+
+    const built = Maps.buildColosseum(scene);
+    arena = {
+      scene,
+      camera,
+      renderer,
+      flames: built.flames,
+      flickerLights: built.flickerLights,
+      bounds: built.bounds,
+      spawnPoints: built.spawnPoints,
+      radius: built.radius,
+      rafId: null,
+      orbitAngle: 0,
+    };
+    window.__arena = arena; // depuración
+    console.log('Coliseo construido. Radio de colisión: ' + arena.radius + ' — spawn points: ' + arena.spawnPoints.length);
+
+    window.addEventListener('resize', resizeArena);
+  }
+
+  resizeArena();
+  canvas.classList.remove('hidden');
+  const placeholder = document.querySelector('#hud .hud-placeholder');
+  if (placeholder) placeholder.classList.add('hidden');
+
+  arenaClock = new THREE.Clock();
+  if (arena.rafId) cancelAnimationFrame(arena.rafId);
+  animateArena();
+}
+
+function stopArena() {
+  if (arena && arena.rafId) {
+    cancelAnimationFrame(arena.rafId);
+    arena.rafId = null;
+  }
+  const canvas = document.getElementById('game-canvas');
+  if (canvas) canvas.classList.add('hidden');
+  const placeholder = document.querySelector('#hud .hud-placeholder');
+  if (placeholder) placeholder.classList.remove('hidden');
+}
+
+function resizeArena() {
+  if (!arena) return;
+  const canvas = arena.renderer.domElement;
+  const parent = canvas.parentElement;
+  const w = parent ? parent.clientWidth : window.innerWidth;
+  const h = parent ? parent.clientHeight : window.innerHeight;
+  arena.renderer.setSize(w, h, false);
+  arena.camera.aspect = w / Math.max(h, 1);
+  arena.camera.updateProjectionMatrix();
+}
+
+function animateArena() {
+  arena.rafId = requestAnimationFrame(animateArena);
+  const dt = arenaClock.getDelta();
+  const t = arenaClock.elapsedTime;
+
+  // Cámara orbitando lento alrededor del Coliseo
+  arena.orbitAngle += dt * 0.18;
+  const orbitR = 29;
+  const height = 12;
+  arena.camera.position.set(
+    orbitR * Math.sin(arena.orbitAngle),
+    height,
+    orbitR * Math.cos(arena.orbitAngle)
+  );
+  arena.camera.lookAt(0, 1.5, 0);
+
+  // Llamas: escala y parpadeo del PointLight
+  for (const flame of arena.flames) {
+    const p = flame.userData.phase || 0;
+    flame.scale.y = 1 + Math.sin(t * 11 + p) * 0.28;
+    flame.scale.x = flame.scale.z = 1 + Math.cos(t * 9 + p) * 0.14;
+    flame.rotation.y += dt * 2.2;
+  }
+  for (const light of arena.flickerLights) {
+    const p = light.userData.phase || 0;
+    light.intensity = (light.userData.baseIntensity || 1.9) + Math.sin(t * 13 + p) * 0.35 + Math.sin(t * 29 + p * 2) * 0.12;
+  }
+
+  arena.renderer.render(arena.scene, arena.camera);
+}
+
 /* ---------- Navegación ---------- */
 
 /** Cambia de pantalla sólo si ui.showScreen acepta el id; devuelve si tuvo éxito. */
@@ -98,6 +214,7 @@ function go(screenId, nextState) {
 function startGame() {
   ui.resetHud();
   go('hud', 'PLAY');
+  startArena();
 }
 
 /* ---------- Cableado de eventos ---------- */
@@ -136,15 +253,15 @@ function bindUI() {
   });
 
   // HUD → volver al título
-  document.getElementById('btn-hud-back').addEventListener('click', () => go('title', 'TITLE'));
+  document.getElementById('btn-hud-back').addEventListener('click', () => { stopArena(); go('title', 'TITLE'); });
 
   // Pausa
   document.getElementById('btn-resume').addEventListener('click', () => go('hud', 'PLAY'));
-  document.getElementById('btn-pause-quit').addEventListener('click', () => go('title', 'TITLE'));
+  document.getElementById('btn-pause-quit').addEventListener('click', () => { stopArena(); go('title', 'TITLE'); });
 
   // Fin de partida
   document.getElementById('btn-retry').addEventListener('click', () => startGame());
-  document.getElementById('btn-gameover-quit').addEventListener('click', () => go('title', 'TITLE'));
+  document.getElementById('btn-gameover-quit').addEventListener('click', () => { stopArena(); go('title', 'TITLE'); });
 
   // Error fatal → reintentar (recargar)
   document.getElementById('btn-error-retry').addEventListener('click', () => window.location.reload());
@@ -171,7 +288,7 @@ function init() {
   bindUI();
   go('title', 'TITLE');
 
-  console.log('Oriental Arena Warriors — listo. Three.js r' + window.THREE.REVISION + ' cargado desde CDN.');
+  console.log('Oriental Arena Warriors — listo. Three.js r' + THREE.REVISION + ' cargado desde CDN (módulos ES + import map).');
 }
 
 init();

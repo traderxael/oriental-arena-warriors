@@ -41,11 +41,11 @@ El juego funciona en GitHub Pages tal cual: activa *Settings → Pages → Deplo
 
 ## Motor 3D
 
-Three.js se carga desde CDN fijado a **r160** (`https://unpkg.com/three@0.160.0/build/three.min.js`). Si unpkg deja de funcionar, index.html documenta el espejo equivalente de jsDelivr. Si el motor no carga o el navegador no soporta WebGL, la página muestra un mensaje de error en español en lugar de una pantalla negra.
+Three.js se carga desde CDN fijado a **r160** como módulos ES con import map en `index.html` (`https://unpkg.com/three@0.160.0/build/three.module.js` y `three/addons/` para GLTFLoader, misma versión). Si unpkg deja de funcionar, index.html documenta el espejo equivalente de jsDelivr. Si el motor no carga o el navegador no soporta WebGL, la página muestra un mensaje de error en español en lugar de una pantalla negra.
 
 ## Estado del proyecto
 
-MVP en desarrollo. Ya disponible: scaffold del repo y flujo de menú principal (título → modo → héroe → arena → HUD placeholder). Modos y arenas marcados como "Próximamente" (Supervivencia, Duelo, Templo, Pagoda, Jardines) llegarán en entregas posteriores.
+MVP en desarrollo. Ya disponible: scaffold del repo y flujo de menú principal (título → modo → héroe → arena → HUD), y el Coliseo del Sol Naciente 3D (arena circular con gradas, arcadas, puertas y antorchas; cámara orbital lenta). Modos y arenas marcados como "Próximamente" (Supervivencia, Duelo, Templo, Pagoda, Jardines) llegarán en entregas posteriores.
 
 ## Créditos
 
