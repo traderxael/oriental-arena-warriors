@@ -172,9 +172,25 @@ function stopArena() {
 
 /* ---------- Enemigos (dummies de depuración ?debug=dummies) ---------- */
 
+/* Libera geometrías/materiales sólo de recursos propios (enemigos con
+   ownsResources=true, p. ej. los maniquíes de depuración). Los enemigos de
+   Task 6 que compartan GLB/materiales procesales NO se tocan aquí. */
+function disposeEnemyResources(group) {
+  group.traverse((n) => {
+    if (!n) return;
+    if (n.geometry && typeof n.geometry.dispose === 'function') n.geometry.dispose();
+    const mats = Array.isArray(n.material) ? n.material : (n.material ? [n.material] : []);
+    for (const m of mats) {
+      if (m && typeof m.dispose === 'function') m.dispose();
+    }
+  });
+}
+
 function removeEnemies() {
   for (const enemy of enemies) {
-    if (enemy && enemy.group && enemy.group.parent) enemy.group.parent.remove(enemy.group);
+    if (!enemy) continue;
+    if (enemy.group && enemy.group.parent) enemy.group.parent.remove(enemy.group);
+    if (enemy.ownsResources && enemy.group) disposeEnemyResources(enemy.group);
   }
   enemies = [];
   window.__enemies = enemies;
@@ -215,6 +231,7 @@ function spawnDebugDummies() {
       maxHp: 60,
       type: 'dummy',
       alive: true,
+      ownsResources: true, // geometría/materiales creados aquí: se liberan en removeEnemies()
       attackCooldownUntil: 0,
       takeDamage(n) {
         this.hp = Math.max(0, this.hp - Math.max(0, Number(n) || 0));
@@ -357,10 +374,14 @@ function resizeArena() {
 
 function animateArena() {
   arena.rafId = requestAnimationFrame(animateArena);
+  // Consumir el delta cada frame (evita un salto al reanudar tras la pausa),
+  // pero el reloj de JUEGO sólo avanza en PLAY: en PAUSE cooldowns y ventana
+  // de combo quedan completamente congelados.
   const dt = Math.min(arenaClock.getDelta(), 0.05);
-  const t = arenaClock.elapsedTime;
-  playTime = t;
   const playing = state === 'PLAY';
+  if (playing) playTime += dt;
+  const t = playTime;
+  window.__playTime = t; // depuración
 
   if (playing) {
     // Jugador: movimiento WASD relativo a cámara + clamp circular

@@ -44,6 +44,16 @@ const FLOATER_RISE = 1.7;              // m/s
 
 /* ---------- Combo / hitbox ---------- */
 
+/** Envuelve un ángulo a ±π (mismo criterio que Logic.normalizeAngle). */
+function normalizeAngle(angle) {
+  let a = Number(angle);
+  if (!Number.isFinite(a)) return 0;
+  a = a % (Math.PI * 2);
+  if (a > Math.PI) a -= Math.PI * 2;
+  if (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+
 /** Vector frontal (XZ normalizado) a partir del yaw del jugador. */
 function forwardXZ(yaw) {
   return { x: Math.sin(yaw), z: Math.cos(yaw) };
@@ -67,7 +77,10 @@ function dealDamage(enemy, damage) {
     enemy.takeDamage(damage);
   } else {
     enemy.hp = Math.max(0, (Number(enemy.hp) || 0) - damage);
-    if (enemy.hp <= 0) enemy.alive = false;
+    if (enemy.hp <= 0) {
+      enemy.alive = false;
+      if (enemy.group) enemy.group.visible = false; // coherente con la interfaz Enemy
+    }
   }
   const dead = enemy.alive === false || (Number(enemy.hp) || 0) <= 0;
   return { damage, killed: dead };
@@ -114,7 +127,7 @@ function tryAttack(player, enemies, now) {
     const { angle, dist } = targetAngleAndDist(origin, enemy.group.position);
     const inRange = window.Logic
       ? window.Logic.inArc(angle, facing, ARC_RAD, dist, range)
-      : dist <= range && Math.abs(angle - facing) <= ARC_RAD / 2;
+      : dist <= range && Math.abs(normalizeAngle(angle - facing)) <= ARC_RAD / 2;
     if (!inRange) continue;
     const { killed } = dealDamage(enemy, damage);
     emitHit(enemy, damage, killed);
