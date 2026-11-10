@@ -13,6 +13,7 @@ import { Maps } from './maps.js';
 import { HEROES } from './heroes.js';
 import { createPlayer, updateCamera } from './player.js';
 import { Combat } from './combat.js';
+import { Enemies } from './enemies.js';
 
 // Dummies de prueba (Task 5): sólo con la URL ?debug=dummies. NO es contenido de juego.
 const DEBUG_DUMMIES = new URLSearchParams(window.location.search).get('debug') === 'dummies';
@@ -30,8 +31,12 @@ let selectedHeroId = HEROES[0].id;
 // Reloj de juego (segundos), actualizado cada frame en animateArena.
 // Los handlers de ratón/teclado lo usan para `now` (combos, cooldowns).
 let playTime = 0;
-// Enemigos vivos (Task 6 los creará de verdad; en Task 5 sólo dummies de depuración)
+// Enemigos vivos (los crea js/enemies.js)
 let enemies = [];
+// Estado de la oleada en curso (spawn escalonado + avance automático)
+let waveState = { wave: 0, queue: [], spawnTimer: 0, spawnedAll: true, clearTimer: 0, maxAlive: 8 };
+const SPAWN_INTERVAL = 0.8;   // s entre apariciones dentro de una oleada
+const WAVE_CLEAR_DELAY = 3;   // s de respiro antes de la siguiente oleada
 // Ráfagas de partículas activas (evento combat:hit)
 const hitBursts = [];
 
@@ -170,27 +175,13 @@ function stopArena() {
   if (placeholder) placeholder.classList.remove('hidden');
 }
 
-/* ---------- Enemigos (dummies de depuración ?debug=dummies) ---------- */
+/* ---------- Enemigos ---------- */
 
-/* Libera geometrías/materiales sólo de recursos propios (enemigos con
-   ownsResources=true, p. ej. los maniquíes de depuración). Los enemigos de
-   Task 6 que compartan GLB/materiales procesales NO se tocan aquí. */
-function disposeEnemyResources(group) {
-  group.traverse((n) => {
-    if (!n) return;
-    if (n.geometry && typeof n.geometry.dispose === 'function') n.geometry.dispose();
-    const mats = Array.isArray(n.material) ? n.material : (n.material ? [n.material] : []);
-    for (const m of mats) {
-      if (m && typeof m.dispose === 'function') m.dispose();
-    }
-  });
-}
-
+/* Libera los recursos propios de todos los enemigos vivos y vacía la lista.
+   Los muertos ya fueron retirados (y liberados) por Enemies.updateAll. */
 function removeEnemies() {
   for (const enemy of enemies) {
-    if (!enemy) continue;
-    if (enemy.group && enemy.group.parent) enemy.group.parent.remove(enemy.group);
-    if (enemy.ownsResources && enemy.group) disposeEnemyResources(enemy.group);
+    if (enemy) Enemies.dispose(enemy);
   }
   enemies = [];
   window.__enemies = enemies;
@@ -246,6 +237,102 @@ function spawnDebugDummies() {
   }
   window.__enemies = enemies;
   console.log('Dummies de depuración creados (?debug=dummies): 2 delante + 1 detrás.');
+}
+
+/* ---------- Oleadas (spawn escalonado) ---------- */
+
+/**
+ * Prepara la oleada `wave`: encola los enemigos de Logic.waveComposition
+ * (mezclados) y respeta maxAlive (≤ 25). Los tipos aún no implementados
+ * (lancero, brute) se omiten con un aviso claro en consola.
+ */
+function startWave(wave) {
+  const comp = window.Logic
+    ? window.Logic.waveComposition(wave)
+    : { ronin: 3, bandido: 0, lancero: 0, brute: 0, maxAlive: 8 };
+  const queue = [];
+  for (const type of Enemies.SUPPORTS) {
+    const n = Number(comp[type]) || 0;
+    for (let i = 0; i < n; i += 1) queue.push(type);
+  }
+  const dropped = (Number(comp.lancero) || 0) + (Number(comp.brute) || 0);
+  if (dropped > 0) {
+    console.info('Oleada ' + wave + ': lancero/brute aún no implementados; se omiten ' + dropped + ' enemigos.');
+  }
+  // Mezcla aleatoria para que no salgan en bloques por tipo
+  for (let i = queue.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = queue[i];
+    queue[i] = queue[j];
+    queue[j] = tmp;
+  }
+  waveState = {
+    wave,
+    queue,
+    spawnTimer: 0, // primer enemigo inmediato
+    spawnedAll: queue.length === 0,
+    clearTimer: 0,
+    maxAlive: Math.min(Number(comp.maxAlive) || 8, 25),
+  };
+  const waveEl = document.getElementById('hud-wave');
+  if (waveEl) waveEl.textContent = String(wave);
+  console.log('Oleada ' + wave + ': ' + (comp.ronin || 0) + ' ronin, ' + (comp.bandido || 0) +
+    ' bandido — maxAlive ' + waveState.maxAlive);
+}
+
+/** Saca enemigos de la cola cada 0.8 s respetando maxAlive; avanza de oleada al limpiarla. */
+function tickWaveSpawning(dt) {
+  if (state !== 'PLAY' || !arena) return;
+  const ws = waveState;
+  if (ws.queue.length) {
+    ws.spawnTimer -= dt;
+    if (ws.spawnTimer <= 0) {
+      if (enemies.length < ws.maxAlive) {
+        const type = ws.queue.shift();
+        enemies.push(Enemies.spawn(type, ws.wave, arena, arena.scene));
+        window.__enemies = enemies;
+        ws.spawnTimer = SPAWN_INTERVAL;
+      } else {
+        ws.spawnTimer = 0.25; // llena la oleada posible: reintentar pronto
+      }
+      if (!ws.queue.length) ws.spawnedAll = true;
+    }
+    return;
+  }
+  if (ws.spawnedAll && enemies.length === 0) {
+    ws.clearTimer += dt;
+    if (ws.clearTimer >= WAVE_CLEAR_DELAY) startWave(ws.wave + 1);
+  }
+}
+
+/* ---------- Vignette de daño ---------- */
+
+let vignetteTimer = null;
+
+/** Flash rojo breve en #vignette-damage al recibir daño. */
+function flashDamageVignette() {
+  const el = document.getElementById('vignette-damage');
+  if (!el) return;
+  el.classList.add('on');
+  if (vignetteTimer) clearTimeout(vignetteTimer);
+  vignetteTimer = setTimeout(() => el.classList.remove('on'), 220);
+}
+
+/** Daño de un enemigo (windup completado) → HP del jugador + flash. */
+function damagePlayer(damage) {
+  const p = arena && arena.player;
+  if (!p || !p.alive) return;
+  if (typeof p.isInvulnerable === 'function' && p.isInvulnerable()) return; // i-frames del dash
+  p.hp = Math.max(0, p.hp - Math.max(0, Number(damage) || 0));
+  flashDamageVignette();
+  lastHpShown = -1;
+  syncHpHud();
+  if (p.hp <= 0) {
+    p.alive = false;
+    // TODO(Task 7): cablear la derrota aquí (ui.showGameOver + stopArena).
+    // Por ahora el jugador queda tumbado y la partida sigue sin enemigos atacando.
+    console.log('El jugador ha caído en la arena (oleada ' + waveState.wave + ').');
+  }
 }
 
 /* ---------- Partículas de impacto (evento combat:hit) ---------- */
@@ -348,6 +435,7 @@ function spawnPlayer() {
   // Cámara detrás del jugador desde el primer frame
   updateCamera(0, arena.camera, arena.player, arena, true);
   if (DEBUG_DUMMIES) spawnDebugDummies();
+  else startWave(1); // Hordas: la partida arranca con la oleada 1
   const s = arena.player.hero.stats;
   console.log('Héroe listo: ' + arena.player.hero.name + ' — HP ' + arena.player.hp +
     ', velocidad ' + s.speed + ', daño ' + s.damage + ', alcance ' + s.range);
@@ -394,6 +482,12 @@ function animateArena() {
     }
     Combat.updateFloaters(dt);
     updateHitParticles(dt);
+
+    // Enemigos: IA, separación, limpieza de muertos + spawn escalonado
+    if (arena.player) {
+      Enemies.updateAll(enemies, dt, arena.player.group.position, t);
+    }
+    tickWaveSpawning(dt);
 
     // Llamas: escala y parpadeo del PointLight
     for (const flame of arena.flames) {
@@ -544,6 +638,9 @@ function init() {
   ui.selectHeroCard(selectedHeroId);
   window.__combat = Combat; // depuración
   window.__enemies = enemies;
+  // Los ataques enemigos (windup completado) restan HP al jugador con flash rojo
+  Enemies.onPlayerDamage((damage) => damagePlayer(damage));
+  Object.defineProperty(window, '__waveState', { get: () => waveState }); // depuración
   bindUI();
   go('title', 'TITLE');
 

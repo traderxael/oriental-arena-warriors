@@ -383,6 +383,20 @@ body {
 
 .hud-back { position: absolute; bottom: 1.4rem; left: 1.4rem; }
 
+/* Flash rojo en pantalla al recibir daño (lo dispara main.js al recibir daño) */
+#vignette-damage {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(160, 52, 44, 0) 52%, rgba(160, 52, 44, 0.6) 100%);
+  transition: opacity 0.4s ease;
+}
+#vignette-damage.on { opacity: 1; transition: opacity 0.06s ease; }
+@media (prefers-reduced-motion: reduce) {
+  #vignette-damage { transition: none; }
+}
+
 /* ============ Error de motor 3D / WebGL ============ */
 #webgl-error {
   position: fixed;
