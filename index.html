@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Oriental Arena Warriors — juego web 3D de peleas contra hordas en una arena con temática oriental.">
+  <title>Oriental Arena Warriors</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1a1a'/%3E%3Ctext x='16' y='23' font-size='18' text-anchor='middle' fill='%23d4af37' font-family='serif'%3E武%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Three.js fijado a la versión 0.160.0 (build UMD, global THREE).
+       Si unpkg falla, cambiar esta única línea por el espejo de jsDelivr:
+       https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js
+       (verificado 200 en ambos el 2026-11-10). No usar file:// ni módulos ES. -->
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js" onerror="window.__threeLoadFailed = true"></script>
+</head>
+<body>
+
+  <!-- Error fatal: motor 3D / WebGL no disponible -->
+  <div id="webgl-error" class="hidden" role="alert">
+    <div class="error-box">
+      <div class="error-kanji">武</div>
+      <h1 id="webgl-error-title">No se pudo cargar el motor 3D</h1>
+      <p id="webgl-error-detail">Revisa tu conexión a internet y recarga la página.</p>
+      <button class="btn btn-primary" id="btn-error-retry" type="button">Reintentar</button>
+    </div>
+  </div>
+
+  <main id="app">
+
+    <!-- Pantalla: Título -->
+    <section id="screen-title" class="screen visible" aria-label="Pantalla de título">
+      <div class="title-emblem" aria-hidden="true">武</div>
+      <h1 class="game-title">Oriental Arena Warriors</h1>
+      <p class="tagline">Hordas, honor y acero bajo el sol naciente</p>
+      <div class="menu-buttons">
+        <button class="btn btn-primary btn-big" id="btn-play" type="button">JUGAR</button>
+      </div>
+      <p class="controls-hint">WASD mover &middot; Shift dash/esquiva &middot; Ratón apunta &middot; Clic ataque &middot; Q especial &middot; Esc pausa</p>
+    </section>
+
+    <!-- Pantalla: Modo de juego -->
+    <section id="screen-mode" class="screen" aria-label="Elige modo de juego">
+      <h2 class="screen-heading">Elige tu modo</h2>
+      <div class="card-row">
+        <button class="card mode-card" type="button" data-mode="hordas">
+          <span class="card-kanji" aria-hidden="true">群</span>
+          <span class="card-title">Hordas</span>
+          <span class="card-desc">Sobrevive oleadas infinitas de enemigos. ¿Cuánto aguantarás?</span>
+        </button>
+        <button class="card mode-card disabled" type="button" disabled
+                title="Disponible en la próxima versión" data-tooltip="Disponible en la próxima versión"
+                aria-disabled="true">
+          <span class="card-kanji" aria-hidden="true">生</span>
+          <span class="card-title">Supervivencia</span>
+          <span class="card-desc">Enfócate en resistir el mayor tiempo posible.</span>
+          <span class="badge-soon">PRÓXIMAMENTE</span>
+        </button>
+        <button class="card mode-card disabled" type="button" disabled
+                title="Disponible en la próxima versión" data-tooltip="Disponible en la próxima versión"
+                aria-disabled="true">
+          <span class="card-kanji" aria-hidden="true">闘</span>
+          <span class="card-title">Duelo</span>
+          <span class="card-desc">Enfréntate a un único maestro en combate 1 contra 1.</span>
+          <span class="badge-soon">PRÓXIMAMENTE</span>
+        </button>
+      </div>
+      <div class="screen-nav">
+        <button class="btn btn-ghost" type="button" data-back="title">&larr; Volver</button>
+      </div>
+    </section>
+
+    <!-- Pantalla: Selección de héroe -->
+    <section id="screen-hero" class="screen" aria-label="Elige tu guerrero">
+      <h2 class="screen-heading">Elige tu guerrero</h2>
+      <div id="hero-cards" class="card-row" role="listbox" aria-label="Héroes disponibles"></div>
+      <div class="screen-nav">
+        <button class="btn btn-ghost" type="button" data-back="mode">&larr; Volver</button>
+        <button class="btn btn-primary" id="btn-hero-continue" type="button">Continuar &rarr;</button>
+      </div>
+    </section>
+
+    <!-- Pantalla: Selección de mapa/arena -->
+    <section id="screen-map" class="screen" aria-label="Elige tu arena">
+      <h2 class="screen-heading">Elige tu arena</h2>
+      <div class="card-row">
+        <button class="card map-card" type="button" data-map="coliseo">
+          <span class="card-kanji" aria-hidden="true">闘</span>
+          <span class="card-title">Coliseo del Sol Naciente</span>
+          <span class="card-desc">La gran arena de piedra bajo el sol. Disponible ya.</span>
+        </button>
+        <button class="card map-card disabled" type="button" disabled
+                title="Disponible en la próxima versión" data-tooltip="Disponible en la próxima versión"
+                aria-disabled="true">
+          <span class="card-kanji" aria-hidden="true">寺</span>
+          <span class="card-title">Templo</span>
+          <span class="card-desc">Combates entre pagodas y farolillos.</span>
+          <span class="badge-soon">PRÓXIMAMENTE</span>
+        </button>
+        <button class="card map-card disabled" type="button" disabled
+                title="Disponible en la próxima versión" data-tooltip="Disponible en la próxima versión"
+                aria-disabled="true">
+          <span class="card-kanji" aria-hidden="true">塔</span>
+          <span class="card-title">Pagoda</span>
+          <span class="card-desc">Duelos en las alturas, entre nubes y campanas.</span>
+          <span class="badge-soon">PRÓXIMAMENTE</span>
+        </button>
+        <button class="card map-card disabled" type="button" disabled
+                title="Disponible en la próxima versión" data-tooltip="Disponible en la próxima versión"
+                aria-disabled="true">
+          <span class="card-kanji" aria-hidden="true">庭</span>
+          <span class="card-title">Jardines</span>
+          <span class="card-desc">Un jardín zen de cerezos en flor.</span>
+          <span class="badge-soon">PRÓXIMAMENTE</span>
+        </button>
+      </div>
+      <div class="screen-nav">
+        <button class="btn btn-ghost" type="button" data-back="hero">&larr; Volver</button>
+      </div>
+    </section>
+
+    <!-- Pantalla: Pausa -->
+    <section id="screen-pause" class="screen" aria-label="Pausa">
+      <h2 class="screen-heading">Pausa</h2>
+      <div class="menu-buttons">
+        <button class="btn btn-primary" id="btn-resume" type="button">Reanudar</button>
+        <button class="btn btn-ghost" id="btn-pause-quit" type="button">Volver al menú</button>
+      </div>
+      <p class="controls-hint">Pulsa Esc para reanudar</p>
+    </section>
+
+    <!-- Pantalla: Fin de partida -->
+    <section id="screen-gameover" class="screen" aria-label="Fin de la partida">
+      <h2 class="screen-heading">Has caído en la arena</h2>
+      <div class="gameover-stats" aria-live="polite">
+        <div class="gameover-row"><span>Oleada alcanzada</span><strong id="go-wave">1</strong></div>
+        <div class="gameover-row"><span>Enemigos derrotados</span><strong id="go-kills">0</strong></div>
+        <div class="gameover-row"><span>Puntuación</span><strong id="go-score">0</strong></div>
+        <div class="gameover-row"><span>Mejor puntuación</span><strong id="go-best">0</strong></div>
+      </div>
+      <div class="menu-buttons">
+        <button class="btn btn-primary" id="btn-retry" type="button">Reintentar</button>
+        <button class="btn btn-ghost" id="btn-gameover-quit" type="button">Volver al menú</button>
+      </div>
+    </section>
+
+    <!-- HUD de juego -->
+    <div id="hud" class="screen" aria-label="Interfaz de juego">
+      <div class="hud-top-left">
+        <div class="hud-label">HP</div>
+        <div class="hp-bar" role="progressbar" aria-label="Vida" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+          <div class="hp-fill" id="hud-hp-fill" style="width:100%"></div>
+        </div>
+        <div class="hud-label">Qi</div>
+        <div class="qi-bar" role="progressbar" aria-label="Qi / especial" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+          <div class="qi-fill" id="hud-qi-fill" style="width:50%"></div>
+        </div>
+      </div>
+      <div class="hud-top-right">
+        <div class="hud-stat">Oleada <span id="hud-wave">1</span></div>
+        <div class="hud-stat">Puntos <span id="hud-score">0</span></div>
+      </div>
+      <div class="hud-placeholder">La arena se abrirá en la próxima entrega&hellip;</div>
+      <button class="btn btn-ghost hud-back" id="btn-hud-back" type="button">&larr; Volver</button>
+    </div>
+
+  </main>
+
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
