@@ -8,7 +8,7 @@ Oriental Arena Warriors es un juego de navegador, sin paso de compilación: la p
 
 ## Estado del proyecto
 
-MVP completo: flujo título → modo → héroe (Akane y Goro) → arena → HUD → resultados → reintentar. Modo Hordas infinito con oleadas acotadas (máximo 25 enemigos vivos), Coliseo del Sol Naciente 3D y fallback procedural si un GLB falta. Verificado: flujo completo E2E sin errores de consola y ~60 fps en el Coliseo con 15 enemigos (headless con GPU). Los modos «Próximamente» (Supervivencia, Duelo) y las arenas (Templo, Pagoda, Jardines) llegarán en la Fase 1.
+MVP implementado: flujo título → modo → héroe (Akane y Goro) → arena → HUD → resultados → reintentar. Modo Hordas infinito con oleadas acotadas (máximo 25 enemigos vivos), Coliseo del Sol Naciente 3D y fallback procedural si un GLB falta. Verificado durante el desarrollo: `node --test` 28/28 y verificación headless (Playwright, Chromium) de cada sistema; pendiente: una pasada E2E en un navegador real con GPU. Los modos «Próximamente» (Supervivencia, Duelo) y las arenas (Templo, Pagoda, Jardines) llegarán en la Fase 1.
 
 ## Motor 3D
 
@@ -16,11 +16,11 @@ Three.js se carga desde CDN fijado a **r160** como módulos ES con import map en
 
 ## GitHub Pages
 
-Juego publicado y jugable en:
+El sitio está publicado y sirve el juego (verificado: la página carga el shell y los menús completos) en:
 
 **https://traderxael.github.io/oriental-arena-warriors/**
 
-Servido como sitio estático desde `main` (raíz `/`), sin workflow de build. Todos los assets se referencian con rutas relativas (`assets/...`), por lo que funciona tal cual bajo el subpath de Pages.
+Servido como sitio estático desde `main` (raíz `/`), sin workflow de build. Todos los assets se referencian con rutas relativas (`assets/...`). El motor (Three.js r160 desde CDN en tu navegador) se carga en tiempo de ejecución; si unpkg falla, usá el espejo jsDelivr documentado en `index.html` o serví el repo localmente.
 
 ## Controles
 
