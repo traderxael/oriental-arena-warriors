@@ -35,13 +35,18 @@ const MAX_ALIVE_CAP = 25;      // límite global de enemigos vivos simultáneos
 
 export const Modes = { startHorde };
 
-/* Acceso seguro a localStorage: en incógnito el mero acceso puede lanzar. */
+/* Acceso seguro a localStorage: en incógnito el mero acceso puede lanzar.
+   Además de getItem, la sonda exige que setItem + removeItem funcionen
+   de verdad (setItem puede tragar errores o fallar por cuota). */
+const PROBE_KEY = '__oaw_probe__';
+
 function safeStorage() {
   try {
     const s = window.localStorage;
-    // Tocar un método fuerza el SecurityError si está bloqueado
-    const probe = s.getItem('__oaw_probe__');
-    void probe;
+    s.setItem(PROBE_KEY, '1');           // tocar setItem fuerza el fallo real
+    const back = s.getItem(PROBE_KEY);
+    if (typeof s.removeItem === 'function') s.removeItem(PROBE_KEY);
+    if (back !== '1') return null;       // el storage no guarda lo que le das
     return s;
   } catch (_err) {
     return null;
@@ -190,22 +195,32 @@ function startHorde(ctx) {
     const score = computeScore();
     const storage = safeStorage(); // null si localStorage está bloqueado (incógnito)
     let prevBest = 0;
-    let canPersist = storage !== null;
-    if (canPersist) {
+    let best = 0;
+    let isRecord = false;
+    if (storage) {
       try {
         prevBest = Logic && typeof Logic.readBest === 'function' ? Logic.readBest(storage) : 0;
       } catch (_err) {
         prevBest = 0;
-        canPersist = false;
       }
-    }
-    // Sin storage no hay récord que batir ni mostrar: mejor '—' y sin badge
-    const isRecord = canPersist && score > prevBest;
-    const best = canPersist ? Math.max(prevBest, score) : 0;
-    if (isRecord) {
-      try {
+      best = Math.max(prevBest, score);
+      if (score > prevBest) {
+        // Logic.writeBest nunca lanza (traga los fallos): hay que verificar
+        // leyendo de vuelta que el récord realmente persistió.
         if (Logic && typeof Logic.writeBest === 'function') Logic.writeBest(storage, score);
-      } catch (_err) { canPersist = false; /* storage bloqueado a medias */ }
+        let persisted = false;
+        try {
+          persisted = Logic && typeof Logic.readBest === 'function' && Logic.readBest(storage) >= score;
+        } catch (_err) {
+          persisted = false;
+        }
+        if (persisted) {
+          isRecord = true;
+        } else {
+          console.warn('No se pudo guardar el récord en localStorage (¿cuota llena?). Se muestra la partida sin insignia de récord.');
+          best = prevBest; // no afirmar una marca que no quedó guardada
+        }
+      }
     }
     const stats = {
       wave: horde.wave,
