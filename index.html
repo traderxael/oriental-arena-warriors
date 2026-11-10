@@ -25,7 +25,7 @@
   <script>
     window.__engineWatchdog = setTimeout(function () {
       if (window.__threeOk) return;
-      var msg = 'No se pudo cargar el motor 3D: la conexión con el CDN está tardando demasiado. Revisa tu conexión a internet y recarga la página.';
+      var msg = 'No se pudo cargar el motor 3D: el CDN no responde o tarda demasiado. Revisa tu conexión a internet y recarga la página.';
       var box = document.getElementById('webgl-error');
       if (box) {
         var detail = document.getElementById('webgl-error-detail');
@@ -192,7 +192,7 @@
         <div class="hud-stat">Oleada <span id="hud-wave">1</span></div>
         <div class="hud-stat">Puntos <span id="hud-score">0</span></div>
       </div>
-      <div class="hud-placeholder">La arena se abrirá en la próxima entrega&hellip;</div>
+      <div class="hud-placeholder">Preparando la arena&hellip;</div>
       <button class="btn btn-ghost hud-back" id="btn-hud-back" type="button">&larr; Volver</button>
     </div>
 

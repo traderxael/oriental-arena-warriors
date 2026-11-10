@@ -92,11 +92,16 @@ function checkEngine() {
 }
 
 function markEngineReady() {
-  window.__engineReady = true;
   if (window.__engineWatchdog) {
     clearTimeout(window.__engineWatchdog);
     window.__engineWatchdog = null;
   }
+  // Recuperación limpia si el watchdog llegó a mostrar el error por un CDN lento:
+  // ocultar el error y volver a mostrar la app cuando el módulo por fin cargó.
+  const box = document.getElementById('webgl-error');
+  if (box) box.classList.add('hidden');
+  const app = document.getElementById('app');
+  if (app) app.classList.remove('hidden');
 }
 
 /* ---------- Arena 3D: Coliseo (Task 3) ---------- */
