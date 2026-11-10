@@ -9,6 +9,13 @@
        hp, maxHp, alive,
        isInvulnerable(),    // true durante los i-frames del dash
        hero,                // definición del héroe (stats, special…)
+       arenaRadius,         // radio de la arena (knockback del especial)
+       comboStep,           // 0-3: paso actual de la cadena combo (Task 5)
+       comboExpiresAt,      // s (reloj de juego) en que expira la cadena
+       specialCooldownUntil,// s (reloj de juego) hasta el que el especial está en cooldown
+       swingStart,          // s del inicio del tajo (animación placeholder)
+       swingDuration,
+       swingStep,
      }
 
    `input` es un objeto de booleanos: { forward, back, left, right }
@@ -69,9 +76,17 @@ function createPlayer(heroId, scene, map) {
   const player = {
     group,
     hero,
+    arenaRadius,
     hp: maxHp,
     maxHp,
     alive: true,
+    // Combate (Task 5): cadena combo, cooldown del especial, animación de tajo
+    comboStep: 0,
+    comboExpiresAt: -1,
+    specialCooldownUntil: 0,
+    swingStart: null,
+    swingDuration: 0.3,
+    swingStep: 0,
     // estado interno
     time: 0,
     dashTime: 0,

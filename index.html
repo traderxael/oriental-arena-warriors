@@ -187,6 +187,12 @@
         <div class="qi-bar" role="progressbar" aria-label="Qi / especial" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
           <div class="qi-fill" id="hud-qi-fill" style="width:50%"></div>
         </div>
+        <div class="hud-label">Especial</div>
+        <div class="special-row" id="hud-special" role="status" aria-live="polite" aria-label="Especial">
+          <span class="special-key" aria-hidden="true">Q</span>
+          <span class="special-name" id="hud-special-name">Desenvaine Relámpago</span>
+          <span class="special-cd ready" id="hud-special-cd">Listo</span>
+        </div>
       </div>
       <div class="hud-top-right">
         <div class="hud-stat">Oleada <span id="hud-wave">1</span></div>
@@ -198,6 +204,8 @@
 
   </main>
 
+  <!-- logic.js: UMD clásico — expone window.Logic (oleadas, combos, inArc…). Debe cargarse antes que main.js -->
+  <script defer src="js/logic.js"></script>
   <script defer src="js/ui.js"></script>
   <script type="module" src="js/main.js"></script>
 </body>
