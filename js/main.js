@@ -39,6 +39,11 @@ let selectedHeroId = HEROES[0].id;
 /* ---------- Motor 3D / WebGL: comprobaciones de arranque ---------- */
 
 function showFatalError(detail) {
+  // Ya se muestra un error específico: desactivar el watchdog para que no lo sobrescriba.
+  if (window.__engineWatchdog) {
+    clearTimeout(window.__engineWatchdog);
+    window.__engineWatchdog = null;
+  }
   const box = document.getElementById('webgl-error');
   const detailEl = document.getElementById('webgl-error-detail');
   if (detailEl && detail) detailEl.textContent = detail;
@@ -73,11 +78,21 @@ function checkEngine() {
   return true;
 }
 
+function markEngineReady() {
+  window.__engineReady = true;
+  if (window.__engineWatchdog) {
+    clearTimeout(window.__engineWatchdog);
+    window.__engineWatchdog = null;
+  }
+}
+
 /* ---------- Navegación ---------- */
 
+/** Cambia de pantalla sólo si ui.showScreen acepta el id; devuelve si tuvo éxito. */
 function go(screenId, nextState) {
-  state = nextState;
-  ui.showScreen(screenId);
+  const ok = ui.showScreen(screenId);
+  if (ok) state = nextState;
+  return ok;
 }
 
 function startGame() {
@@ -149,6 +164,7 @@ function bindUI() {
 
 function init() {
   if (!checkEngine()) return;
+  markEngineReady();
 
   ui.setHeroCards(HEROES);
   ui.selectHeroCard(selectedHeroId);

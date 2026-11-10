@@ -13,8 +13,32 @@
   <!-- Three.js fijado a la versión 0.160.0 (build UMD, global THREE).
        Si unpkg falla, cambiar esta única línea por el espejo de jsDelivr:
        https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js
-       (verificado 200 en ambos el 2026-11-10). No usar file:// ni módulos ES. -->
-  <script src="https://unpkg.com/three@0.160.0/build/three.min.js" onerror="window.__threeLoadFailed = true"></script>
+       (verificado 200 en ambos el 2026-11-10). No usar file:// ni módulos ES.
+       Se carga con `defer` para no bloquear el parser; un watchdog inline
+       (8 s) muestra el error en español si el CDN cuelga sin responder. -->
+  <script>
+    window.__engineWatchdog = setTimeout(function () {
+      if (window.__engineReady) return;
+      var msg = 'No se pudo cargar el motor 3D: la conexión con el CDN está tardando demasiado. Revisa tu conexión a internet y recarga la página.';
+      var box = document.getElementById('webgl-error');
+      if (box) {
+        var detail = document.getElementById('webgl-error-detail');
+        if (detail) detail.textContent = msg;
+        box.classList.remove('hidden');
+        var app = document.getElementById('app');
+        if (app) app.classList.add('hidden');
+      } else {
+        // El body aún no existe: inyectar un overlay mínimo con el mismo mensaje.
+        var overlay = document.createElement('div');
+        overlay.id = 'webgl-error';
+        overlay.setAttribute('role', 'alert');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:#1a1a1a;color:#f3e9d2;font-family:Georgia,serif;text-align:center;padding:2rem;';
+        overlay.innerHTML = '<div><h1 style="color:#d4af37;font-size:1.4rem;">No se pudo cargar el motor 3D</h1><p>' + msg + '</p><p><button onclick="location.reload()" style="padding:0.6rem 1.6rem;background:#a0342c;color:#f3e9d2;border:2px solid #d4af37;border-radius:4px;cursor:pointer;">Reintentar</button></p></div>';
+        (document.body || document.documentElement).appendChild(overlay);
+      }
+    }, 8000);
+  </script>
+  <script defer src="https://unpkg.com/three@0.160.0/build/three.min.js" onerror="window.__threeLoadFailed = true"></script>
 </head>
 <body>
 
@@ -168,7 +192,7 @@
 
   </main>
 
-  <script src="js/ui.js"></script>
-  <script src="js/main.js"></script>
+  <script defer src="js/ui.js"></script>
+  <script defer src="js/main.js"></script>
 </body>
 </html>

@@ -15,27 +15,54 @@ const ui = (() => {
     return document.getElementById(id === 'hud' ? 'hud' : 'screen-' + id);
   }
 
-  /** Muestra sólo la pantalla indicada; oculta el resto. */
+  /**
+   * Muestra sólo la pantalla indicada; oculta el resto.
+   * Devuelve true si la pantalla existe y se mostró, false en caso contrario.
+   */
   function showScreen(id) {
     if (SCREENS.indexOf(id) === -1) {
       console.warn('ui.showScreen: pantalla desconocida "' + id + '". Ids válidos: ' + SCREENS.join(', '));
-      return;
+      return false;
     }
     SCREENS.forEach((s) => {
       const el = screenEl(s);
       if (el) el.classList.toggle('visible', s === id);
     });
+    return true;
+  }
+
+  /** Crea una fila de estadística (etiqueta + barra) usando sólo DOM/textContent. */
+  function createStatRow(label, value) {
+    const v = Math.max(0, Math.min(100, Number(value) || 0));
+    const row = document.createElement('div');
+    row.className = 'stat-row';
+
+    const name = document.createElement('span');
+    name.textContent = label;
+
+    const track = document.createElement('div');
+    track.className = 'stat-track';
+
+    const fill = document.createElement('div');
+    fill.className = 'stat-fill';
+    fill.style.width = v + '%';
+
+    track.appendChild(fill);
+    row.appendChild(name);
+    row.appendChild(track);
+    return row;
   }
 
   /**
    * Pinta las tarjetas de héroe en #hero-cards.
    * heroes: [{ id, name, epithet, desc, stats: { fuerza, velocidad, defensa } }] (stats 0–100)
    * La selección se marca con la clase .selected; el clic lo gestiona main.js.
+   * Todo el contenido se inserta vía textContent/DOM API (sin innerHTML).
    */
   function setHeroCards(heroes) {
     const wrap = document.getElementById('hero-cards');
     if (!wrap) return;
-    wrap.innerHTML = '';
+    wrap.textContent = '';
     heroes.forEach((hero) => {
       const card = document.createElement('button');
       card.type = 'button';
@@ -44,22 +71,34 @@ const ui = (() => {
       card.setAttribute('role', 'option');
       card.setAttribute('aria-selected', 'false');
 
-      const stat = (label, value) => {
-        const v = Math.max(0, Math.min(100, Number(value) || 0));
-        return '<div class="stat-row"><span>' + label + '</span>' +
-          '<div class="stat-track"><div class="stat-fill" style="width:' + v + '%"></div></div></div>';
-      };
+      const kanji = document.createElement('span');
+      kanji.className = 'card-kanji';
+      kanji.setAttribute('aria-hidden', 'true');
+      kanji.textContent = hero.kanji || '武';
 
-      card.innerHTML =
-        '<span class="card-kanji" aria-hidden="true">' + (hero.kanji || '武') + '</span>' +
-        '<span class="card-title">' + hero.name + '</span>' +
-        '<span class="card-desc"><em>' + (hero.epithet || '') + '</em><br>' + (hero.desc || '') + '</span>' +
-        '<span class="hero-stats">' +
-          stat('Fuerza', hero.stats && hero.stats.fuerza) +
-          stat('Velocidad', hero.stats && hero.stats.velocidad) +
-          stat('Defensa', hero.stats && hero.stats.defensa) +
-        '</span>';
+      const title = document.createElement('span');
+      title.className = 'card-title';
+      title.textContent = hero.name;
 
+      const desc = document.createElement('span');
+      desc.className = 'card-desc';
+      const epithet = document.createElement('em');
+      epithet.textContent = hero.epithet || '';
+      desc.appendChild(epithet);
+      desc.appendChild(document.createElement('br'));
+      desc.appendChild(document.createTextNode(hero.desc || ''));
+
+      const stats = document.createElement('span');
+      stats.className = 'hero-stats';
+      const s = hero.stats || {};
+      stats.appendChild(createStatRow('Fuerza', s.fuerza));
+      stats.appendChild(createStatRow('Velocidad', s.velocidad));
+      stats.appendChild(createStatRow('Defensa', s.defensa));
+
+      card.appendChild(kanji);
+      card.appendChild(title);
+      card.appendChild(desc);
+      card.appendChild(stats);
       wrap.appendChild(card);
     });
   }
