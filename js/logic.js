@@ -1,6 +1,7 @@
 /*
- * Oriental Arena Warriors — lógica pura de juego (sin DOM).
+ * Oriental Arena Warriors - logica pura de juego (sin DOM).
  * Funciona en el navegador (window.Logic) y bajo CommonJS (node --test).
+ * Archivo guardado como UTF-8.
  */
 (function (root, factory) {
   const api = factory();
@@ -32,8 +33,8 @@
   }
 
   // Oleada 1: {ronin:3,bandido:0,lancero:0,brute:0}
-  // Oleada 5+: incluye lanceros; múltiplos de 5: 1 brute.
-  // maxAlive = min(6 + wave*2, 25); totales siempre ≤ 25.
+  // Oleada 5+: incluye lanceros; multiplos de 5: 1 brute.
+  // maxAlive = min(6 + wave*2, 25); totales siempre <= 25.
   function waveComposition(wave) {
     var w = clampInt(wave, 1, 1000000);
 
@@ -76,7 +77,10 @@
   };
 
   function enemyStats(type, wave) {
-    var base = ENEMY_BASE[type] || ENEMY_BASE.ronin;
+    var base = ENEMY_BASE[type];
+    if (!base) {
+      throw new Error('enemyStats: unknown type "' + String(type) + '" (expected ronin|bandido|lancero|brute)');
+    }
     return {
       hp: Math.min(HP_CAP, Math.round(scaleStat(base.hp, wave))),
       speed: base.speed,
@@ -109,6 +113,7 @@
     var r = Number(range);
     var arc = Number(arcRad);
     if (!Number.isFinite(d) || !Number.isFinite(r) || !Number.isFinite(arc)) return false;
+    if (d < 0) return false; // distancia negativa no es valida: fuera de rango
     if (d > r) return false;
     var diff = Math.abs(normalizeAngle(Number(angleToTarget) - Number(facing)));
     return diff <= Math.abs(arc) / 2;
@@ -144,7 +149,7 @@
       if (!storage) return;
       storage.setItem(BEST_KEY, String(sanitizeBest(value)));
     } catch (_err) {
-      /* storage bloqueado (incógnito) o sin cuota: ignorar */
+      // storage bloqueado (incognito) o sin cuota: ignorar
     }
   }
 

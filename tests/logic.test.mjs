@@ -71,6 +71,11 @@ test('enemyStats: hp tiene clamp de 800', () => {
   assert.equal(w100.hp, 800);
 });
 
+test('enemyStats: tipo desconocido lanza Error claro', () => {
+  assert.throws(() => Logic.enemyStats('dragon', 1), /unknown type/i);
+  assert.throws(() => Logic.enemyStats(undefined, 1), /unknown type/i);
+});
+
 test('enemyStats: devuelve las 5 propiedades requeridas', () => {
   const s = Logic.enemyStats('lancero', 3);
   for (const key of ['hp', 'speed', 'damage', 'range', 'attackCooldown']) {
@@ -92,6 +97,10 @@ test('inArc: true en rango y frontal', () => {
 
 test('inArc: false fuera de rango', () => {
   assert.equal(Logic.inArc(0, 0, Math.PI / 2, 5, 3), false);
+});
+
+test('inArc: dist negativa se trata como fuera de rango (false)', () => {
+  assert.equal(Logic.inArc(0, 0, Math.PI / 2, -1, 3), false);
 });
 
 test('inArc: false detrás del atacante', () => {
