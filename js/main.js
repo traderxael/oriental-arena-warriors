@@ -10,6 +10,8 @@
 import * as THREE from 'three';
 import { Assets } from './assets.js';
 import { Maps } from './maps.js';
+import { HEROES } from './heroes.js';
+import { createPlayer, updateCamera } from './player.js';
 
 // Expone THREE para consola/depuración y para que checkEngine()
 // y el resto del código clásico puedan inspeccionar la versión.
@@ -19,34 +21,20 @@ window.__threeOk = true;
 
 var state = 'TITLE';
 
-const HEROES = [
-  {
-    id: 'kaito',
-    name: 'Kaito',
-    epithet: 'El Samurái Errante',
-    desc: 'Katana veloz y disciplina de acero. Equilibrio perfecto entre ataque y defensa.',
-    kanji: '侍',
-    stats: { fuerza: 80, velocidad: 65, defensa: 70 },
-  },
-  {
-    id: 'mei',
-    name: 'Mei',
-    epithet: 'La Cultivadora del Qi',
-    desc: 'Canaliza la energía espiritual en ráfagas devastadoras. Gran reserva de qi.',
-    kanji: '氣',
-    stats: { fuerza: 60, velocidad: 75, defensa: 55 },
-  },
-  {
-    id: 'takeshi',
-    name: 'Takeshi',
-    epithet: 'El Monje de los Puños',
-    desc: 'Puños y patadas letales forjados en el templo. Un muro que devuelve el golpe.',
-    kanji: '拳',
-    stats: { fuerza: 70, velocidad: 60, defensa: 90 },
-  },
-];
-
 let selectedHeroId = HEROES[0].id;
+
+// Teclas de movimiento pulsadas (KeyW/A/S/D + flechas). Se traducen a
+// booleanos { forward, back, left, right } para player.update(dt, input, camera).
+const keys = new Set();
+
+function readPlayerInput() {
+  return {
+    forward: keys.has('KeyW') || keys.has('ArrowUp'),
+    back: keys.has('KeyS') || keys.has('ArrowDown'),
+    left: keys.has('KeyA') || keys.has('ArrowLeft'),
+    right: keys.has('KeyD') || keys.has('ArrowRight'),
+  };
+}
 
 /* ---------- Motor 3D / WebGL: comprobaciones de arranque ---------- */
 
@@ -106,8 +94,9 @@ function markEngineReady() {
 
 /* ---------- Arena 3D: Coliseo (Task 3) ---------- */
 
-let arena = null;        // { scene, camera, renderer, flames, flickerLights, rafId, orbitAngle }
+let arena = null;        // { scene, camera, renderer, flames, flickerLights, rafId, radius, player }
 let arenaClock = null;
+let lastHpShown = -1;
 
 function startArena() {
   const canvas = document.getElementById('game-canvas');
@@ -136,7 +125,7 @@ function startArena() {
       spawnPoints: built.spawnPoints,
       radius: built.radius,
       rafId: null,
-      orbitAngle: 0,
+      player: null,
     };
     window.__arena = arena; // depuración
     console.log('Coliseo construido. Radio de colisión: ' + arena.radius + ' — spawn points: ' + arena.spawnPoints.length);
@@ -159,10 +148,49 @@ function stopArena() {
     cancelAnimationFrame(arena.rafId);
     arena.rafId = null;
   }
+  removePlayer();
   const canvas = document.getElementById('game-canvas');
   if (canvas) canvas.classList.add('hidden');
   const placeholder = document.querySelector('#hud .hud-placeholder');
   if (placeholder) placeholder.classList.remove('hidden');
+}
+
+/* ---------- Jugador ---------- */
+
+function syncHpHud() {
+  if (!arena || !arena.player) return;
+  const p = arena.player;
+  const pct = Math.max(0, Math.min(100, (p.hp / p.maxHp) * 100));
+  if (pct === lastHpShown) return;
+  lastHpShown = pct;
+  const fill = document.getElementById('hud-hp-fill');
+  if (fill) {
+    fill.style.width = pct + '%';
+    const bar = fill.closest('.hp-bar');
+    if (bar) bar.setAttribute('aria-valuenow', String(Math.round(pct)));
+  }
+}
+
+function spawnPlayer() {
+  if (!arena) return;
+  removePlayer();
+  arena.player = createPlayer(selectedHeroId, arena.scene, arena);
+  window.__player = arena.player; // depuración
+  lastHpShown = -1;
+  syncHpHud();
+  // Cámara detrás del jugador desde el primer frame
+  updateCamera(0, arena.camera, arena.player, arena, true);
+  const s = arena.player.hero.stats;
+  console.log('Héroe listo: ' + arena.player.hero.name + ' — HP ' + arena.player.hp +
+    ', velocidad ' + s.speed + ', daño ' + s.damage + ', alcance ' + s.range);
+}
+
+function removePlayer() {
+  if (arena && arena.player) {
+    arena.scene.remove(arena.player.group);
+    arena.player = null;
+    window.__player = null;
+  }
 }
 
 function resizeArena() {
@@ -178,31 +206,31 @@ function resizeArena() {
 
 function animateArena() {
   arena.rafId = requestAnimationFrame(animateArena);
-  const dt = arenaClock.getDelta();
+  const dt = Math.min(arenaClock.getDelta(), 0.05);
   const t = arenaClock.elapsedTime;
+  const playing = state === 'PLAY';
 
-  // Cámara orbitando lento alrededor del Coliseo
-  arena.orbitAngle += dt * 0.18;
-  const orbitR = 29;
-  const height = 12;
-  arena.camera.position.set(
-    orbitR * Math.sin(arena.orbitAngle),
-    height,
-    orbitR * Math.cos(arena.orbitAngle)
-  );
-  arena.camera.lookAt(0, 1.5, 0);
+  if (playing) {
+    // Jugador: movimiento WASD relativo a cámara + clamp circular
+    if (arena.player) {
+      arena.player.update(dt, readPlayerInput(), arena.camera);
+      updateCamera(dt, arena.camera, arena.player, arena, false);
+      syncHpHud();
+    }
 
-  // Llamas: escala y parpadeo del PointLight
-  for (const flame of arena.flames) {
-    const p = flame.userData.phase || 0;
-    flame.scale.y = 1 + Math.sin(t * 11 + p) * 0.28;
-    flame.scale.x = flame.scale.z = 1 + Math.cos(t * 9 + p) * 0.14;
-    flame.rotation.y += dt * 2.2;
+    // Llamas: escala y parpadeo del PointLight
+    for (const flame of arena.flames) {
+      const p = flame.userData.phase || 0;
+      flame.scale.y = 1 + Math.sin(t * 11 + p) * 0.28;
+      flame.scale.x = flame.scale.z = 1 + Math.cos(t * 9 + p) * 0.14;
+      flame.rotation.y += dt * 2.2;
+    }
+    for (const light of arena.flickerLights) {
+      const p = light.userData.phase || 0;
+      light.intensity = (light.userData.baseIntensity || 1.9) + Math.sin(t * 13 + p) * 0.35 + Math.sin(t * 29 + p * 2) * 0.12;
+    }
   }
-  for (const light of arena.flickerLights) {
-    const p = light.userData.phase || 0;
-    light.intensity = (light.userData.baseIntensity || 1.9) + Math.sin(t * 13 + p) * 0.35 + Math.sin(t * 29 + p * 2) * 0.12;
-  }
+  // En PAUSE el update queda congelado: sólo se re-renderiza el fotograma.
 
   arena.renderer.render(arena.scene, arena.camera);
 }
@@ -220,6 +248,7 @@ function startGame() {
   ui.resetHud();
   go('hud', 'PLAY');
   startArena();
+  spawnPlayer();
 }
 
 /* ---------- Cableado de eventos ---------- */
@@ -271,15 +300,32 @@ function bindUI() {
   // Error fatal → reintentar (recargar)
   document.getElementById('btn-error-retry').addEventListener('click', () => window.location.reload());
 
-  // Esc: pausa / reanudar
+  // Movimiento + dash + Esc: pausa / reanudar
   window.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    if (state === 'PLAY') {
-      go('pause', 'PAUSE');
-    } else if (state === 'PAUSE') {
-      go('hud', 'PLAY');
+    const code = event.code;
+    if (code === 'Escape') {
+      if (state === 'PLAY') {
+        go('pause', 'PAUSE');
+      } else if (state === 'PAUSE') {
+        go('hud', 'PLAY');
+      }
+      return;
+    }
+    if (code === 'KeyW' || code === 'KeyA' || code === 'KeyS' || code === 'KeyD' ||
+        code === 'ArrowUp' || code === 'ArrowDown' || code === 'ArrowLeft' || code === 'ArrowRight') {
+      keys.add(code);
+      event.preventDefault();
+      return;
+    }
+    if (code === 'ShiftLeft' || code === 'ShiftRight') {
+      if (state === 'PLAY' && arena && arena.player) arena.player.dash();
     }
   });
+  window.addEventListener('keyup', (event) => {
+    keys.delete(event.code);
+  });
+  // Evita teclas atascadas al cambiar de ventana/pestaña
+  window.addEventListener('blur', () => keys.clear());
 }
 
 /* ---------- Arranque ---------- */

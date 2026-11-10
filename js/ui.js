@@ -55,7 +55,9 @@ const ui = (() => {
 
   /**
    * Pinta las tarjetas de héroe en #hero-cards.
-   * heroes: [{ id, name, epithet, desc, stats: { fuerza, velocidad, defensa } }] (stats 0–100)
+   * heroes: [{ id, name, epithet, desc, kanji, story, theme, weapon,
+   *             stats: { fuerza, velocidad, defensa } (0–100),
+   *             special: { name, cooldown, desc } }]
    * La selección se marca con la clase .selected; el clic lo gestiona main.js.
    * Todo el contenido se inserta vía textContent/DOM API (sin innerHTML).
    */
@@ -80,6 +82,10 @@ const ui = (() => {
       title.className = 'card-title';
       title.textContent = hero.name;
 
+      const tags = document.createElement('span');
+      tags.className = 'hero-tags';
+      tags.textContent = [hero.theme, hero.weapon].filter(Boolean).join(' · ');
+
       const desc = document.createElement('span');
       desc.className = 'card-desc';
       const epithet = document.createElement('em');
@@ -88,6 +94,14 @@ const ui = (() => {
       desc.appendChild(document.createElement('br'));
       desc.appendChild(document.createTextNode(hero.desc || ''));
 
+      const story = document.createElement('span');
+      story.className = 'hero-story';
+      const storyLabel = document.createElement('span');
+      storyLabel.className = 'hero-story-label';
+      storyLabel.textContent = 'Historia';
+      story.appendChild(storyLabel);
+      story.appendChild(document.createTextNode(hero.story || ''));
+
       const stats = document.createElement('span');
       stats.className = 'hero-stats';
       const s = hero.stats || {};
@@ -95,10 +109,26 @@ const ui = (() => {
       stats.appendChild(createStatRow('Velocidad', s.velocidad));
       stats.appendChild(createStatRow('Defensa', s.defensa));
 
+      const special = document.createElement('span');
+      special.className = 'hero-special';
+      const sp = hero.special || {};
+      const spName = document.createElement('span');
+      spName.className = 'hero-special-name';
+      spName.textContent = 'Q · ' + (sp.name || 'Especial') +
+        (sp.cooldown != null ? ' (' + sp.cooldown + ' s)' : '');
+      const spDesc = document.createElement('span');
+      spDesc.className = 'hero-special-desc';
+      spDesc.textContent = sp.desc || '';
+      special.appendChild(spName);
+      special.appendChild(spDesc);
+
       card.appendChild(kanji);
       card.appendChild(title);
+      if (tags.textContent) card.appendChild(tags);
       card.appendChild(desc);
+      if (hero.story) card.appendChild(story);
       card.appendChild(stats);
+      card.appendChild(special);
       wrap.appendChild(card);
     });
   }
