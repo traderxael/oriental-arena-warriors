@@ -193,7 +193,11 @@ const ui = (() => {
     const score = document.getElementById('hud-score');
     const timer = document.getElementById('hud-timer');
     if (hp) hp.style.width = '100%';
+    const hpBar = document.getElementById('hud-hp');
+    if (hpBar) hpBar.setAttribute('aria-valuenow', '100');
     if (qi) qi.style.width = '50%';
+    const qiBar = document.getElementById('hud-qi');
+    if (qiBar) qiBar.setAttribute('aria-valuenow', '50');
     if (wave) wave.textContent = '1';
     if (score) score.textContent = '0';
     if (timer) timer.textContent = '00:00';

@@ -86,7 +86,17 @@ function dealDamage(enemy, damage) {
   return { damage, killed: dead };
 }
 
+/* Comprobación defensiva de Audio (js/audio.js, binding léxico global).
+   Si el audio está bloqueado o el archivo no cargó, el juego sigue igual. */
+function sfx(name) {
+  try {
+    if (typeof Audio !== 'undefined' && Audio && typeof Audio.play === 'function') Audio.play(name);
+  } catch (_err) { /* silencioso */ }
+}
+
 function emitHit(enemy, damage, killed) {
+  sfx('hit');
+  if (killed) sfx('enemyDie');
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
   const p = enemy.group.position;
   window.dispatchEvent(new CustomEvent('combat:hit', {
@@ -120,6 +130,7 @@ function tryAttack(player, enemies, now) {
   player.swingStart = t;
   player.swingDuration = 0.3;
   player.swingStep = player.comboStep;
+  sfx('slash');
 
   const facing = player.group.rotation.y;
   const origin = player.group.position;
@@ -156,6 +167,7 @@ function trySpecial(player, enemies, now) {
   player.swingStart = t;
   player.swingDuration = 0.45;
   player.swingStep = 3;
+  sfx('special');
 
   for (const enemy of aliveEnemies(enemies)) {
     const pos = enemy.group.position;

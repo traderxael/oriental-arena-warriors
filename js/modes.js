@@ -58,6 +58,13 @@ function setHudText(id, text) {
   if (el) el.textContent = text;
 }
 
+/* Comprobación defensiva de Audio (js/audio.js, binding léxico global). */
+function sfx(name) {
+  try {
+    if (typeof Audio !== 'undefined' && Audio && typeof Audio.play === 'function') Audio.play(name);
+  } catch (_err) { /* silencioso */ }
+}
+
 function formatTime(totalSeconds) {
   const t = Math.max(0, Math.floor(Number(totalSeconds) || 0));
   const m = Math.floor(t / 60);
@@ -130,6 +137,7 @@ function startHorde(ctx) {
     horde.phase = queue.length ? 'spawning' : 'active';
     setHudText('hud-wave', String(n));
     if (uiRef && typeof uiRef.showBanner === 'function') uiRef.showBanner('OLEADA ' + n);
+    sfx('waveStart');
     console.log('Oleada ' + n + ': ' + (comp.ronin || 0) + ' ronin, ' + (comp.bandido || 0) +
       ' bandido, ' + (comp.lancero || 0) + ' lancero, ' + (comp.brute || 0) +
       ' brute — maxAlive ' + horde.maxAlive);
@@ -190,6 +198,7 @@ function startHorde(ctx) {
     if (horde.over) return null;
     horde.over = true;
     horde.phase = 'over';
+    sfx('gameOver');
 
     const time = Math.floor(horde.elapsed);
     const score = computeScore();

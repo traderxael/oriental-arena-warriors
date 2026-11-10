@@ -46,7 +46,11 @@ body {
   overflow-y: auto;
   text-align: center;
 }
-.screen.visible { display: flex; }
+.screen.visible { display: flex; animation: screen-fade 0.38s ease both; }
+@keyframes screen-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 
 .screen-heading {
   font-size: clamp(1.6rem, 4vw, 2.4rem);
@@ -58,6 +62,120 @@ body {
 }
 
 /* ============ Título ============ */
+/* Cielo de amanecer animado detrás del contenido del título */
+#screen-title {
+  overflow: hidden;
+  background: linear-gradient(180deg,
+    #241219 0%,
+    #3d1a17 22%,
+    #6e2a1e 42%,
+    #a0342c 58%,
+    #c96a35 74%,
+    #d4af37 92%,
+    #f0d078 100%);
+  background-size: 100% 180%;
+  background-position: 50% 0%;
+  animation: sky-sunrise 16s ease-in-out infinite alternate;
+}
+@keyframes sky-sunrise {
+  0%   { background-position: 50% 0%; }
+  100% { background-position: 50% 78%; }
+}
+
+/* Capas del backdrop: sol naciente + cresta + siluetas (pagoda y torii) */
+.title-backdrop { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.title-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.4rem;
+  padding: 0 1.5rem;
+}
+.title-sun {
+  position: absolute;
+  left: 50%;
+  bottom: 16%;
+  width: clamp(140px, 22vw, 240px);
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff3c4 0%, #ffd968 38%, rgba(255, 190, 80, 0.85) 62%, rgba(255, 190, 80, 0) 78%);
+  box-shadow: 0 0 90px 40px rgba(255, 214, 110, 0.55);
+  animation: sun-breathe 5.5s ease-in-out infinite;
+}
+@keyframes sun-breathe {
+  0%, 100% { box-shadow: 0 0 70px 30px rgba(255, 214, 110, 0.45); }
+  50%      { box-shadow: 0 0 110px 55px rgba(255, 214, 110, 0.65); }
+}
+.title-ridge {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 34%;
+  background: #241a15;
+  opacity: 0.92;
+  clip-path: polygon(
+    0% 62%, 9% 48%, 17% 60%, 26% 34%, 34% 55%, 43% 44%, 52% 58%,
+    60% 30%, 68% 52%, 77% 42%, 85% 57%, 93% 46%, 100% 60%,
+    100% 100%, 0% 100%
+  );
+}
+
+/* Silueta de pagoda (tinta) construida con CSS */
+.pagoda-silhouette {
+  position: absolute;
+  bottom: 6%;
+  left: 7%;
+  width: 170px;
+  height: 300px;
+  background: transparent;
+}
+.pagoda-roof, .pagoda-body, .pagoda-spire {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #16100d;
+}
+.pagoda-spire { bottom: 246px; width: 6px; height: 46px; }
+.pagoda-roof { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+.pagoda-roof-1 { bottom: 218px; width: 84px;  height: 34px; }
+.pagoda-roof-2 { bottom: 138px; width: 126px; height: 42px; }
+.pagoda-roof-3 { bottom: 40px;  width: 168px; height: 50px; }
+.pagoda-body-1 { bottom: 176px; width: 34px; height: 44px; }
+.pagoda-body-2 { bottom: 78px;  width: 50px; height: 62px; }
+.pagoda-body-3 { bottom: 0;     width: 68px; height: 42px; }
+
+/* Silueta de torii (tinta) construida con CSS */
+.torii-silhouette {
+  position: absolute;
+  bottom: 5%;
+  right: 7%;
+  width: 210px;
+  height: 150px;
+}
+.torii-top, .torii-second, .torii-pillar {
+  position: absolute;
+  background: #16100d;
+}
+.torii-top {
+  top: 0;
+  left: -22px;
+  width: 254px;
+  height: 18px;
+  clip-path: polygon(0% 100%, 3.5% 15%, 50% 0%, 96.5% 15%, 100% 100%);
+  border-radius: 3px;
+}
+.torii-second {
+  top: 42px;
+  left: 0;
+  width: 210px;
+  height: 12px;
+}
+.torii-pillar { top: 18px; width: 20px; height: 132px; }
+.torii-pillar-l { left: 32px; transform: rotate(2.2deg); transform-origin: top center; }
+.torii-pillar-r { right: 32px; transform: rotate(-2.2deg); transform-origin: top center; }
+
 .title-emblem {
   font-size: clamp(4rem, 12vw, 7rem);
   line-height: 1;
@@ -80,18 +198,24 @@ body {
 }
 
 .tagline {
-  color: var(--papel-oscuro);
+  color: #efe0bd;
   font-style: italic;
   font-size: clamp(0.9rem, 2vw, 1.15rem);
   letter-spacing: 0.05em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75), 0 0 14px rgba(0, 0, 0, 0.5);
 }
 
 .controls-hint {
-  color: var(--papel-oscuro);
+  color: #efe4c3;
   font-size: 0.8rem;
   letter-spacing: 0.04em;
-  opacity: 0.85;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  background: rgba(16, 12, 9, 0.55);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 4px;
+  padding: 0.32rem 0.9rem;
 }
+
 
 /* ============ Botones ============ */
 .menu-buttons {
@@ -115,7 +239,7 @@ body {
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
-.btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px var(--sombra); border-color: var(--dorado); }
+.btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px var(--sombra), 0 0 16px rgba(212, 175, 55, 0.35); border-color: var(--dorado); color: var(--dorado); text-shadow: 0 0 12px rgba(212, 175, 55, 0.45); }
 .btn:active { transform: translateY(0); }
 .btn:focus-visible { outline: 3px solid var(--dorado); outline-offset: 3px; }
 
@@ -125,7 +249,8 @@ body {
   color: var(--papel);
   text-shadow: 0 1px 2px var(--tinta);
 }
-.btn-primary:hover { background: linear-gradient(180deg, #b5443a 0%, var(--rojo) 100%); }
+.btn-primary:hover { background: linear-gradient(180deg, #b5443a 0%, var(--rojo) 100%); color: #ffe9a8; }
+.btn-ghost:hover { color: var(--dorado); border-color: var(--dorado); background: rgba(212, 175, 55, 0.08); }
 
 .btn-big { font-size: 1.3rem; padding: 0.9rem 3.4rem; }
 
@@ -134,7 +259,6 @@ body {
   border-color: rgba(212, 175, 55, 0.45);
   color: var(--papel-oscuro);
 }
-.btn-ghost:hover { color: var(--dorado); border-color: var(--dorado); }
 
 .screen-nav {
   display: flex;
@@ -173,7 +297,7 @@ body {
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
   text-align: center;
 }
-.card:hover:not(.disabled) { transform: translateY(-4px) scale(1.02); border-color: var(--dorado); box-shadow: 0 14px 30px var(--sombra); }
+.card:hover:not(.disabled) { transform: translateY(-4px) scale(1.02); border-color: var(--dorado); box-shadow: 0 14px 30px var(--sombra), 0 0 22px rgba(212, 175, 55, 0.35); }
 .card:focus-visible { outline: 3px solid var(--dorado); outline-offset: 3px; }
 
 .card-kanji { font-size: 3rem; line-height: 1; color: var(--rojo); }
@@ -487,5 +611,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .title-emblem { animation: none; }
+  #screen-title { animation: none; }
+  .title-sun { animation: none; }
+  .screen.visible { animation: none; }
   .btn, .card { transition: none; }
 }

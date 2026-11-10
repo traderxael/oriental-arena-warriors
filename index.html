@@ -61,13 +61,34 @@
 
     <!-- Pantalla: Título -->
     <section id="screen-title" class="screen visible" aria-label="Pantalla de título">
-      <div class="title-emblem" aria-hidden="true">武</div>
-      <h1 class="game-title">Oriental Arena Warriors</h1>
-      <p class="tagline">Hordas, honor y acero bajo el sol naciente</p>
-      <div class="menu-buttons">
-        <button class="btn btn-primary btn-big" id="btn-play" type="button">JUGAR</button>
+      <div class="title-backdrop" aria-hidden="true">
+        <div class="title-sun"></div>
+        <div class="title-ridge"></div>
+        <div class="pagoda-silhouette">
+          <span class="pagoda-spire"></span>
+          <span class="pagoda-roof pagoda-roof-1"></span>
+          <span class="pagoda-body pagoda-body-1"></span>
+          <span class="pagoda-roof pagoda-roof-2"></span>
+          <span class="pagoda-body pagoda-body-2"></span>
+          <span class="pagoda-roof pagoda-roof-3"></span>
+          <span class="pagoda-body pagoda-body-3"></span>
+        </div>
+        <div class="torii-silhouette">
+          <span class="torii-top"></span>
+          <span class="torii-second"></span>
+          <span class="torii-pillar torii-pillar-l"></span>
+          <span class="torii-pillar torii-pillar-r"></span>
+        </div>
       </div>
-      <p class="controls-hint">WASD mover &middot; Shift dash/esquiva &middot; Ratón apunta &middot; Clic ataque &middot; Q especial &middot; Esc pausa</p>
+      <div class="title-content">
+        <div class="title-emblem" aria-hidden="true">武</div>
+        <h1 class="game-title">Oriental Arena Warriors</h1>
+        <p class="tagline">Hordas, honor y acero bajo el sol naciente</p>
+        <div class="menu-buttons">
+          <button class="btn btn-primary btn-big" id="btn-play" type="button">JUGAR</button>
+        </div>
+        <p class="controls-hint">WASD mover &middot; Shift dash/esquiva &middot; Ratón apunta &middot; Clic ataque &middot; Q especial &middot; Esc pausa</p>
+      </div>
     </section>
 
     <!-- Pantalla: Modo de juego -->
@@ -186,7 +207,7 @@
           <div class="hp-fill" id="hud-hp-fill" style="width:100%"></div>
         </div>
         <div class="hud-label">Qi</div>
-        <div class="qi-bar" role="progressbar" aria-label="Qi / especial" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+        <div class="qi-bar" id="hud-qi" role="progressbar" aria-label="Qi / especial" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
           <div class="qi-fill" id="hud-qi-fill" style="width:50%"></div>
         </div>
         <div class="hud-label">Especial</div>
@@ -209,6 +230,8 @@
 
   </main>
 
+  <!-- audio.js: binding léxico global Audio (SFX Web Audio). Debe cargarse antes que main.js -->
+  <script defer src="js/audio.js"></script>
   <!-- logic.js: UMD clásico — expone window.Logic (oleadas, combos, inArc…). Debe cargarse antes que main.js -->
   <script defer src="js/logic.js"></script>
   <script defer src="js/ui.js"></script>

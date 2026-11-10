@@ -16,6 +16,13 @@ import { Combat } from './combat.js';
 import { Enemies } from './enemies.js';
 import { Modes } from './modes.js';
 
+/* Comprobación defensiva de Audio (js/audio.js, binding léxico global). */
+function sfx(name) {
+  try {
+    if (typeof Audio !== 'undefined' && Audio && typeof Audio.play === 'function') Audio.play(name);
+  } catch (_err) { /* silencioso */ }
+}
+
 // Dummies de prueba (Task 5): sólo con la URL ?debug=dummies. NO es contenido de juego.
 const DEBUG_DUMMIES = new URLSearchParams(window.location.search).get('debug') === 'dummies';
 
@@ -261,6 +268,7 @@ function damagePlayer(damage) {
   if (!p || !p.alive) return;
   if (typeof p.isInvulnerable === 'function' && p.isInvulnerable()) return; // i-frames del dash
   p.hp = Math.max(0, p.hp - Math.max(0, Number(damage) || 0));
+  sfx('hurt');
   flashDamageVignette();
   lastHpShown = -1;
   syncHpHud();
@@ -272,6 +280,7 @@ function damagePlayer(damage) {
       state = 'GAMEOVER';
       if (!stats) {
         // Modo no disponible (p. ej. ?debug=dummies): pantalla básica de fin
+        sfx('gameOver');
         stopArena();
         ui.showScreen('gameover');
       }
@@ -357,6 +366,8 @@ function syncHpHud() {
   const pct = Math.max(0, Math.min(100, (p.hp / p.maxHp) * 100));
   if (pct === lastHpShown) return;
   lastHpShown = pct;
+  const hudHp = document.getElementById('hud-hp');
+  if (hudHp) hudHp.setAttribute('aria-valuenow', String(Math.round(pct)));
   const fill = document.getElementById('hud-hp-fill');
   if (fill) {
     fill.style.width = pct + '%';
@@ -479,6 +490,12 @@ function startGame() {
 /* ---------- Cableado de eventos ---------- */
 
 function bindUI() {
+  // Clic de UI en cualquier botón (delegado: cubre botones dinámicos como las tarjetas de héroe)
+  document.addEventListener('click', (event) => {
+    const btn = event.target && typeof event.target.closest === 'function' ? event.target.closest('button') : null;
+    if (btn) sfx('uiClick');
+  });
+
   // Título → Modo
   document.getElementById('btn-play').addEventListener('click', () => go('mode', 'MODE'));
 
@@ -567,7 +584,7 @@ function bindUI() {
       return;
     }
     if (code === 'ShiftLeft' || code === 'ShiftRight') {
-      if (state === 'PLAY' && arena && arena.player) arena.player.dash();
+      if (state === 'PLAY' && arena && arena.player && arena.player.dash()) sfx('dash');
       return;
     }
     if (code === 'KeyQ') {
