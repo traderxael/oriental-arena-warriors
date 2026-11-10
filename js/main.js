@@ -14,6 +14,7 @@ import { HEROES } from './heroes.js';
 import { createPlayer, updateCamera } from './player.js';
 import { Combat } from './combat.js';
 import { Enemies } from './enemies.js';
+import { Modes } from './modes.js';
 
 // Dummies de prueba (Task 5): sólo con la URL ?debug=dummies. NO es contenido de juego.
 const DEBUG_DUMMIES = new URLSearchParams(window.location.search).get('debug') === 'dummies';
@@ -31,12 +32,11 @@ let selectedHeroId = HEROES[0].id;
 // Reloj de juego (segundos), actualizado cada frame en animateArena.
 // Los handlers de ratón/teclado lo usan para `now` (combos, cooldowns).
 let playTime = 0;
-// Enemigos vivos (los crea js/enemies.js)
-let enemies = [];
-// Estado de la oleada en curso (spawn escalonado + avance automático)
-let waveState = { wave: 0, queue: [], spawnTimer: 0, spawnedAll: true, clearTimer: 0, maxAlive: 8 };
-const SPAWN_INTERVAL = 0.8;   // s entre apariciones dentro de una oleada
-const WAVE_CLEAR_DELAY = 3;   // s de respiro antes de la siguiente oleada
+// Enemigos vivos (los crea js/enemies.js). Array estable: se muta in situ.
+const enemies = [];
+// Controlador del modo Hordas (js/modes.js): única máquina de oleadas.
+// null cuando no hay partida de hordas activa (p. ej. ?debug=dummies).
+let horde = null;
 // Ráfagas de partículas activas (evento combat:hit)
 const hitBursts = [];
 
@@ -165,6 +165,7 @@ function stopArena() {
     cancelAnimationFrame(arena.rafId);
     arena.rafId = null;
   }
+  horde = null;
   removeEnemies();
   Combat.clearFloaters();
   clearHitBursts();
@@ -183,7 +184,7 @@ function removeEnemies() {
   for (const enemy of enemies) {
     if (enemy) Enemies.dispose(enemy);
   }
-  enemies = [];
+  enemies.length = 0; // array estable: los controladores guardan la referencia
   window.__enemies = enemies;
 }
 
@@ -239,71 +240,7 @@ function spawnDebugDummies() {
   console.log('Dummies de depuración creados (?debug=dummies): 2 delante + 1 detrás.');
 }
 
-/* ---------- Oleadas (spawn escalonado) ---------- */
-
-/**
- * Prepara la oleada `wave`: encola los enemigos de Logic.waveComposition
- * (mezclados) y respeta maxAlive (≤ 25). Los tipos aún no implementados
- * (lancero, brute) se omiten con un aviso claro en consola.
- */
-function startWave(wave) {
-  const comp = window.Logic
-    ? window.Logic.waveComposition(wave)
-    : { ronin: 3, bandido: 0, lancero: 0, brute: 0, maxAlive: 8 };
-  const queue = [];
-  for (const type of Enemies.SUPPORTS) {
-    const n = Number(comp[type]) || 0;
-    for (let i = 0; i < n; i += 1) queue.push(type);
-  }
-  const dropped = (Number(comp.lancero) || 0) + (Number(comp.brute) || 0);
-  if (dropped > 0) {
-    console.info('Oleada ' + wave + ': lancero/brute aún no implementados; se omiten ' + dropped + ' enemigos.');
-  }
-  // Mezcla aleatoria para que no salgan en bloques por tipo
-  for (let i = queue.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const tmp = queue[i];
-    queue[i] = queue[j];
-    queue[j] = tmp;
-  }
-  waveState = {
-    wave,
-    queue,
-    spawnTimer: 0, // primer enemigo inmediato
-    spawnedAll: queue.length === 0,
-    clearTimer: 0,
-    maxAlive: Math.min(Number(comp.maxAlive) || 8, 25),
-  };
-  const waveEl = document.getElementById('hud-wave');
-  if (waveEl) waveEl.textContent = String(wave);
-  console.log('Oleada ' + wave + ': ' + (comp.ronin || 0) + ' ronin, ' + (comp.bandido || 0) +
-    ' bandido — maxAlive ' + waveState.maxAlive);
-}
-
-/** Saca enemigos de la cola cada 0.8 s respetando maxAlive; avanza de oleada al limpiarla. */
-function tickWaveSpawning(dt) {
-  if (state !== 'PLAY' || !arena) return;
-  const ws = waveState;
-  if (ws.queue.length) {
-    ws.spawnTimer -= dt;
-    if (ws.spawnTimer <= 0) {
-      if (enemies.length < ws.maxAlive) {
-        const type = ws.queue.shift();
-        enemies.push(Enemies.spawn(type, ws.wave, arena, arena.scene));
-        window.__enemies = enemies;
-        ws.spawnTimer = SPAWN_INTERVAL;
-      } else {
-        ws.spawnTimer = 0.25; // llena la oleada posible: reintentar pronto
-      }
-      if (!ws.queue.length) ws.spawnedAll = true;
-    }
-    return;
-  }
-  if (ws.spawnedAll && enemies.length === 0) {
-    ws.clearTimer += dt;
-    if (ws.clearTimer >= WAVE_CLEAR_DELAY) startWave(ws.wave + 1);
-  }
-}
+/* ---------- Oleadas: lógica absorbida por Modes.startHorde (js/modes.js) ---------- */
 
 /* ---------- Vignette de daño ---------- */
 
@@ -329,9 +266,17 @@ function damagePlayer(damage) {
   syncHpHud();
   if (p.hp <= 0) {
     p.alive = false;
-    // TODO(Task 7): cablear la derrota aquí (ui.showGameOver + stopArena).
-    // Por ahora el jugador queda tumbado y la partida sigue sin enemigos atacando.
-    console.log('El jugador ha caído en la arena (oleada ' + waveState.wave + ').');
+    if (state === 'PLAY') {
+      // Fin de partida: el modo muestra el game over y congela las oleadas
+      const stats = horde ? horde.gameOver() : null;
+      state = 'GAMEOVER';
+      if (!stats) {
+        // Modo no disponible (p. ej. ?debug=dummies): pantalla básica de fin
+        stopArena();
+        ui.showScreen('gameover');
+      }
+      console.log('El jugador ha caído en la arena (oleada ' + (stats ? stats.wave : '?') + ').');
+    }
   }
 }
 
@@ -434,8 +379,17 @@ function spawnPlayer() {
   Combat.updateSpecialHud(arena.player, playTime);
   // Cámara detrás del jugador desde el primer frame
   updateCamera(0, arena.camera, arena.player, arena, true);
-  if (DEBUG_DUMMIES) spawnDebugDummies();
-  else startWave(1); // Hordas: la partida arranca con la oleada 1
+  if (DEBUG_DUMMIES) {
+    horde = null; // los dummies son un objetivo de pruebas: sin modo hordas
+    spawnDebugDummies();
+  } else {
+    // Hordas: la partida arranca con la oleada 1 (la gestiona Modes.startHorde)
+    horde = Modes.startHorde({
+      getArena: () => arena,
+      getPlayer: () => (arena && arena.player) || null,
+      enemies,
+    });
+  }
   const s = arena.player.hero.stats;
   console.log('Héroe listo: ' + arena.player.hero.name + ' — HP ' + arena.player.hp +
     ', velocidad ' + s.speed + ', daño ' + s.damage + ', alcance ' + s.range);
@@ -487,7 +441,7 @@ function animateArena() {
     if (arena.player) {
       Enemies.updateAll(enemies, dt, arena.player.group.position, t);
     }
-    tickWaveSpawning(dt);
+    if (horde) horde.update(dt);
 
     // Llamas: escala y parpadeo del PointLight
     for (const flame of arena.flames) {
@@ -571,9 +525,10 @@ function bindUI() {
   // Error fatal → reintentar (recargar)
   document.getElementById('btn-error-retry').addEventListener('click', () => window.location.reload());
 
-  // combat:hit → partículas + damage floater (Task 5)
+  // combat:hit → partículas + damage floater (Task 5) + conteo de kills (Hordas)
   window.addEventListener('combat:hit', (event) => {
     const d = event.detail || {};
+    if (d.killed && horde) horde.registerKill();
     const x = Number(d.x) || 0;
     const y = Number(d.y) || 1.4;
     const z = Number(d.z) || 0;
@@ -640,7 +595,7 @@ function init() {
   window.__enemies = enemies;
   // Los ataques enemigos (windup completado) restan HP al jugador con flash rojo
   Enemies.onPlayerDamage((damage) => damagePlayer(damage));
-  Object.defineProperty(window, '__waveState', { get: () => waveState }); // depuración
+  Object.defineProperty(window, '__hordeState', { get: () => (horde ? horde.state() : null) }); // depuración
   bindUI();
   go('title', 'TITLE');
 

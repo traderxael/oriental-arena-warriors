@@ -163,9 +163,11 @@
     <!-- Pantalla: Fin de partida -->
     <section id="screen-gameover" class="screen" aria-label="Fin de la partida">
       <h2 class="screen-heading">Has caído en la arena</h2>
+      <div id="go-record" class="record-badge hidden" role="status">¡NUEVO RÉCORD!</div>
       <div class="gameover-stats" aria-live="polite">
         <div class="gameover-row"><span>Oleada alcanzada</span><strong id="go-wave">1</strong></div>
         <div class="gameover-row"><span>Enemigos derrotados</span><strong id="go-kills">0</strong></div>
+        <div class="gameover-row"><span>Tiempo</span><strong id="go-time">00:00</strong></div>
         <div class="gameover-row"><span>Puntuación</span><strong id="go-score">0</strong></div>
         <div class="gameover-row"><span>Mejor puntuación</span><strong id="go-best">0</strong></div>
       </div>
@@ -197,7 +199,9 @@
       <div class="hud-top-right">
         <div class="hud-stat">Oleada <span id="hud-wave">1</span></div>
         <div class="hud-stat">Puntos <span id="hud-score">0</span></div>
+        <div class="hud-stat">Tiempo <span id="hud-timer">00:00</span></div>
       </div>
+      <div id="banner-wave" role="status" aria-live="assertive"></div>
       <div class="hud-placeholder">Preparando la arena&hellip;</div>
       <div id="vignette-damage" aria-hidden="true"></div>
       <button class="btn btn-ghost hud-back" id="btn-hud-back" type="button">&larr; Volver</button>

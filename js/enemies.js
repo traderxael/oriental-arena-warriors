@@ -1,9 +1,10 @@
 /* ============================================================
-   enemies.js — Enemigos: ronin y bandido + IA de persecución
+   enemies.js — Enemigos: ronin, bandido, lancero y brute + IA de persecución
 
    Interfaz pública (global de depuración `window.Enemies`):
      Enemies.spawn(type, wave, map, scene) -> Enemy
-       Crea un enemigo del `type` ('ronin' | 'bandido') con las stats
+       Crea un enemigo del `type` ('ronin' | 'bandido' | 'lancero' | 'brute')
+       con las stats
        escaladas por oleada de Logic.enemyStats(type, wave) y lo añade
        a `scene` en un spawnPoint aleatorio de `map` (mapa o cualquier
        objeto con { spawnPoints: THREE.Vector3[], radius: number }).
@@ -18,7 +19,7 @@
        Registra el manejador que recibe (damage, enemy) cuando el
        windup de un ataque enemigo se completa y el jugador sigue en
        rango. main.js lo usa para restar HP y flashear el vignette.
-     Enemies.SUPPORTS — tipos con builders implementados (['ronin','bandido']).
+     Enemies.SUPPORTS — tipos con builders implementados (['ronin','bandido','lancero','brute']).
 
    Enemy (interfaz compatible con Combat):
      { group, hp, maxHp, type, alive, attackCooldownUntil,
@@ -55,7 +56,7 @@ const SEPARATION_RADIUS = 0.9;      // m — repulsión entre enemigos
 const WINDUP_TIME = 0.4;            // s de windup antes del golpe
 const WINDUP_RANGE_SLACK = 1.4;     // el golpe conecta hasta range * slack
 const ENEMY_RADIUS = 0.65;          // para el clamp circular en la arena
-const SUPPORTS = ['ronin', 'bandido'];
+const SUPPORTS = ['ronin', 'bandido', 'lancero', 'brute'];
 
 /* ---------- Materiales y helpers (patrón heroes.js) ---------- */
 
@@ -96,6 +97,56 @@ function buildShortKatana(bladeLength) {
   return wrapper;
 }
 
+/** Lanza (yari) procedural para el lancero: asta larga con hoja de cuatro filos. */
+function buildSpear(bladeLength) {
+  const g = new THREE.Group();
+  const shaftLen = bladeLength * 0.78;
+  const bladeLen = bladeLength * 0.22;
+  const shaftR = 0.028;
+  const shaft = mesh(new THREE.CylinderGeometry(shaftR, shaftR * 1.15, shaftLen, 8), '#6b4f2c', { roughness: 0.8 });
+  shaft.position.y = shaftLen / 2;
+  // Virola (casquillo) entre asta y hoja
+  const collar = mesh(new THREE.CylinderGeometry(shaftR * 1.7, shaftR * 1.7, 0.06, 10), '#8a6d3b', { roughness: 0.4, metalness: 0.6 });
+  collar.position.y = shaftLen + 0.03;
+  // Hoja: cono de 4 caras, acero pulido
+  const blade = mesh(new THREE.ConeGeometry(0.055, bladeLen, 4), '#cfd2d6', { roughness: 0.28, metalness: 0.85 });
+  blade.position.y = shaftLen + 0.06 + bladeLen / 2;
+  blade.rotation.y = Math.PI / 4;
+  g.add(shaft, collar, blade);
+  const wrapper = new THREE.Group();
+  wrapper.add(g);
+  // El pivote agarra el asta por su parte baja (tercio inferior)
+  g.position.y = -bladeLength * 0.28;
+  return wrapper;
+}
+
+/** Kanabō (maza de guerra) procedural para el brute: madera gruesa con aros de hierro. */
+function buildKanabo(length) {
+  const g = new THREE.Group();
+  const gripLen = length * 0.32;
+  const headLen = length * 0.68;
+  const gripR = 0.042;
+  const headR = 0.085;
+  const grip = mesh(new THREE.CylinderGeometry(gripR, gripR * 1.1, gripLen, 8), '#33241a', { roughness: 0.85 });
+  grip.position.y = gripLen / 2;
+  const head = mesh(new THREE.CylinderGeometry(headR * 0.82, headR, headLen, 10), '#4a3826', { roughness: 0.78 });
+  head.position.y = gripLen + headLen / 2;
+  // Aros de hierro que ciñen la cabeza
+  [0.22, 0.52, 0.8].forEach((f) => {
+    const ring = mesh(new THREE.CylinderGeometry(headR * (1.02 - f * 0.18), headR * (1.02 - f * 0.18), 0.05, 10), '#4d4d52', { roughness: 0.45, metalness: 0.7 });
+    ring.position.y = gripLen + headLen * f;
+    g.add(ring);
+  });
+  // Punta roma de hierro
+  const cap = mesh(new THREE.CylinderGeometry(headR * 0.55, headR * 0.82, 0.07, 10), '#5a5a60', { roughness: 0.4, metalness: 0.75 });
+  cap.position.y = gripLen + headLen + 0.035;
+  g.add(grip, head, cap);
+  const wrapper = new THREE.Group();
+  wrapper.add(g);
+  g.position.y = -gripLen * 0.3;
+  return wrapper;
+}
+
 /** Machete procedural para el bandido: hoja ancha y oxidada. */
 function buildMachete(bladeLength) {
   const g = new THREE.Group();
@@ -123,10 +174,16 @@ function buildMachete(bladeLength) {
 function createWeaponPivot(weapon, x, y, z, rotZ) {
   const holder = new THREE.Group();
   holder.name = 'weapon';
-  holder.userData.weaponLength = weapon === 'katana' ? 0.95 : 0.72;
+  const weaponLengths = { katana: 0.95, machete: 0.72, spear: 2.35, kanabo: 1.35 };
+  holder.userData.weaponLength = weaponLengths[weapon] || 0.72;
   holder.position.set(x, y, z);
   holder.rotation.z = rotZ;
-  holder.add(weapon === 'katana' ? buildShortKatana(0.95) : buildMachete(0.72));
+  let built;
+  if (weapon === 'katana') built = buildShortKatana(0.95);
+  else if (weapon === 'machete') built = buildMachete(0.72);
+  else if (weapon === 'spear') built = buildSpear(2.35);
+  else built = buildKanabo(1.35);
+  holder.add(built);
   return holder;
 }
 
@@ -270,7 +327,114 @@ function buildBandido() {
   return g;
 }
 
-const BUILDERS = { ronin: buildRonin, bandido: buildBandido };
+/** Lancero: índigo oscuro con franja carmesí, yari (lanza) larga. Alcance superior. ~1.74 m. */
+function buildLancero() {
+  const g = new THREE.Group();
+  g.name = 'enemy:lancero';
+
+  const C = { cloth: '#3d4b5c', clothDark: '#2a3441', sash: '#7a2d24', skin: '#caa176', dark: '#1f2733' };
+
+  g.add(buildLegs(0.76, 0.088, C.clothDark, '#2b2b30'));
+
+  // Torso: haramaki índigo con franja carmesí
+  const torsoY = 1.09;
+  const torso = mesh(new THREE.CylinderGeometry(0.215, 0.285, 0.6, 12), C.cloth, { roughness: 0.82 });
+  torso.position.y = torsoY;
+  const sash = mesh(new THREE.CylinderGeometry(0.27, 0.275, 0.08, 12), C.sash, { roughness: 0.6 });
+  sash.position.y = 0.8;
+  g.add(torso, sash);
+
+  // Cintas cruzadas del pecho (coraza ligera de tela)
+  [-1, 1].forEach((side) => {
+    const strap = mesh(new THREE.BoxGeometry(0.09, 0.62, 0.03), C.clothDark, { roughness: 0.85 });
+    strap.position.set(side * 0.11, torsoY + 0.02, 0.225);
+    strap.rotation.z = side * 0.42;
+    g.add(strap);
+  });
+
+  // Brazos: mangas índigo arremangadas; antebrazos al descubierto para el yari
+  [-1, 1].forEach((side) => {
+    const sleeve = mesh(new THREE.CylinderGeometry(0.064, 0.07, 0.3, 8), C.cloth, { roughness: 0.8 });
+    sleeve.position.set(side * 0.27, 1.13, 0);
+    sleeve.rotation.z = side * 0.28;
+    const fore = mesh(new THREE.CylinderGeometry(0.048, 0.054, 0.28, 8), C.skin, { roughness: 0.75 });
+    fore.position.set(side * 0.35, 0.88, 0.06);
+    fore.rotation.z = side * 0.18;
+    g.add(sleeve, fore);
+  });
+
+  // Cabeza + tokin (casquete lacado oscuro) y coleta
+  const head = mesh(new THREE.SphereGeometry(0.15, 12, 10), C.skin, { roughness: 0.7 });
+  head.position.y = 1.47;
+  const cap = mesh(new THREE.CylinderGeometry(0.115, 0.145, 0.13, 12), C.dark, { roughness: 0.35, metalness: 0.25 });
+  cap.position.y = 1.575;
+  const topknot = mesh(new THREE.SphereGeometry(0.045, 8, 6), '#14181f', { roughness: 0.6 });
+  topknot.position.y = 1.66;
+  g.add(head, cap, topknot);
+
+  const weapon = createWeaponPivot('spear', 0.35, 0.92, 0.09, -0.42);
+  g.add(weapon);
+
+  shadowed(g);
+  return g;
+}
+
+/** Brute: coloso acorazado, gran masa y kanabō. Lento, muy resistente y demoledor. ~2.15 m. */
+function buildBrute() {
+  const g = new THREE.Group();
+  g.name = 'enemy:brute';
+
+  const C = { cloth: '#5a2d2d', clothDark: '#3c1f1f', iron: '#4d4d52', ironDark: '#333338', skin: '#a97a52', band: '#241a12' };
+
+  // Piernas gruesas
+  g.add(buildLegs(0.88, 0.135, C.clothDark, '#241a12'));
+
+  // Torso: enorme, con plancha de hierro en el pecho
+  const torsoY = 1.32;
+  const torso = mesh(new THREE.CylinderGeometry(0.36, 0.47, 0.82, 14), C.cloth, { roughness: 0.9 });
+  torso.position.y = torsoY;
+  const plate = mesh(new THREE.BoxGeometry(0.52, 0.34, 0.08), C.iron, { roughness: 0.4, metalness: 0.7 });
+  plate.position.set(0, torsoY + 0.08, 0.4);
+  const belt = mesh(new THREE.CylinderGeometry(0.45, 0.46, 0.1, 14), C.ironDark, { roughness: 0.45, metalness: 0.65 });
+  belt.position.y = 0.95;
+  g.add(torso, plate, belt);
+
+  // Hombreras de hierro (sode grandes)
+  [-1, 1].forEach((side) => {
+    const pauldron = mesh(new THREE.BoxGeometry(0.26, 0.3, 0.34), C.iron, { roughness: 0.38, metalness: 0.72 });
+    pauldron.position.set(side * 0.44, 1.56, 0);
+    pauldron.rotation.z = side * 0.14;
+    g.add(pauldron);
+  });
+
+  // Brazos: mangas anchas y antebrazos de cuero
+  [-1, 1].forEach((side) => {
+    const sleeve = mesh(new THREE.CylinderGeometry(0.105, 0.115, 0.38, 10), C.cloth, { roughness: 0.88 });
+    sleeve.position.set(side * 0.44, 1.32, 0);
+    sleeve.rotation.z = side * 0.26;
+    const fore = mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.34, 10), C.band, { roughness: 0.8 });
+    fore.position.set(side * 0.56, 1.0, 0.06);
+    fore.rotation.z = side * 0.14;
+    g.add(sleeve, fore);
+  });
+
+  // Cabeza + kabuto (casco) con maedate (cresta) de media luna
+  const head = mesh(new THREE.SphereGeometry(0.185, 12, 10), C.skin, { roughness: 0.75 });
+  head.position.y = 1.8;
+  const helm = mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), C.iron, { roughness: 0.35, metalness: 0.75 });
+  helm.position.y = 1.84;
+  const crest = mesh(new THREE.BoxGeometry(0.06, 0.2, 0.04), '#d4af37', { roughness: 0.35, metalness: 0.8 });
+  crest.position.y = 2.06;
+  g.add(head, helm, crest);
+
+  const weapon = createWeaponPivot('kanabo', 0.6, 1.02, 0.1, -0.62);
+  g.add(weapon);
+
+  shadowed(g);
+  return g;
+}
+
+const BUILDERS = { ronin: buildRonin, bandido: buildBandido, lancero: buildLancero, brute: buildBrute };
 
 /* ---------- Daño al jugador ---------- */
 

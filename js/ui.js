@@ -6,6 +6,7 @@
                            'title' | 'mode' | 'hero' | 'map' | 'pause' | 'gameover' | 'hud'
      ui.setHeroCards(heroes) — pinta las tarjetas de selección de héroe
      ui.showGameOver(stats)  — rellena #screen-gameover y lo muestra
+     ui.showBanner(texto)    — destello central (#banner-wave)
    ============================================================ */
 
 const ui = (() => {
@@ -142,6 +143,14 @@ const ui = (() => {
     });
   }
 
+  /** Formatea segundos como MM:SS (Tiempo en HUD y game over). */
+  function formatTime(totalSeconds) {
+    const t = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const m = Math.floor(t / 60);
+    const s = t % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
   /** Rellena y muestra la pantalla de fin de partida. */
   function showGameOver(stats) {
     const s = stats || {};
@@ -151,9 +160,29 @@ const ui = (() => {
     };
     set('go-wave', s.wave);
     set('go-kills', s.kills);
+    set('go-time', formatTime(s.time));
     set('go-score', s.score);
-    set('go-best', s.best);
+    // Mejor: '—' si no hay récord guardado todavía
+    const bestEl = document.getElementById('go-best');
+    if (bestEl) bestEl.textContent = s.hasBest ? String(s.best) : '—';
+    const record = document.getElementById('go-record');
+    if (record) record.classList.toggle('hidden', !s.isRecord);
     showScreen('gameover');
+  }
+
+  let bannerTimer = null;
+
+  /** Muestra un destello central con el texto (p. ej. "OLEADA 3"); se oculta solo. */
+  function showBanner(text) {
+    const el = document.getElementById('banner-wave');
+    if (!el) return;
+    el.textContent = String(text == null ? '' : text);
+    el.classList.remove('on');
+    // Forzar reflow para reiniciar la animación si el banner ya estaba visible
+    void el.offsetWidth;
+    el.classList.add('on');
+    if (bannerTimer) clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => el.classList.remove('on'), 2400);
   }
 
   /** Resetea los indicadores del HUD a sus valores iniciales. */
@@ -162,11 +191,13 @@ const ui = (() => {
     const qi = document.getElementById('hud-qi-fill');
     const wave = document.getElementById('hud-wave');
     const score = document.getElementById('hud-score');
+    const timer = document.getElementById('hud-timer');
     if (hp) hp.style.width = '100%';
     if (qi) qi.style.width = '50%';
     if (wave) wave.textContent = '1';
     if (score) score.textContent = '0';
+    if (timer) timer.textContent = '00:00';
   }
 
-  return { showScreen, setHeroCards, selectHeroCard, showGameOver, resetHud };
+  return { showScreen, setHeroCards, selectHeroCard, showGameOver, showBanner, resetHud };
 })();

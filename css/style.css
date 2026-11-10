@@ -397,6 +397,59 @@ body {
   #vignette-damage { transition: none; }
 }
 
+/* Banner central de oleada (OLEADA N) */
+#banner-wave {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.85);
+  font-family: 'Noto Serif JP', Georgia, serif;
+  font-weight: 900;
+  font-size: clamp(2rem, 6vw, 3.4rem);
+  letter-spacing: 0.22em;
+  color: var(--dorado);
+  text-shadow: 0 2px 0 var(--tinta), 0 0 34px rgba(212, 175, 55, 0.45), 0 6px 18px var(--sombra);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+#banner-wave.on {
+  animation: banner-flash 2.4s ease forwards;
+}
+@keyframes banner-flash {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  12% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  22% { transform: translate(-50%, -50%) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.02); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #banner-wave.on { animation: none; opacity: 1; }
+}
+
+/* Badge de récord en la pantalla de fin de partida */
+.record-badge {
+  font-family: 'Noto Serif JP', Georgia, serif;
+  font-weight: 900;
+  font-size: 1.15rem;
+  letter-spacing: 0.18em;
+  color: var(--tinta);
+  background: linear-gradient(180deg, #e8c95c, var(--dorado) 55%, #a8842c);
+  border: 2px solid #f7e9b8;
+  border-radius: 6px;
+  padding: 0.4rem 1.5rem;
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.5), 0 4px 12px var(--sombra);
+  animation: record-pop 0.6s ease;
+}
+@keyframes record-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .record-badge { animation: none; }
+}
+
 /* ============ Error de motor 3D / WebGL ============ */
 #webgl-error {
   position: fixed;
