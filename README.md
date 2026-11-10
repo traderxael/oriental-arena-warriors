@@ -6,6 +6,22 @@ Juego web 3D (Three.js) de peleas contra hordas en una arena con temática orien
 
 Oriental Arena Warriors es un juego de navegador, sin paso de compilación: la página se sirve tal cual como sitio estático. Combate por oleadas en una arena 3D, con héroes seleccionables y una estética de papel, lacre y oro.
 
+## Estado del proyecto
+
+MVP completo: flujo título → modo → héroe (Akane y Goro) → arena → HUD → resultados → reintentar. Modo Hordas infinito con oleadas acotadas (máximo 25 enemigos vivos), Coliseo del Sol Naciente 3D y fallback procedural si un GLB falta. Verificado: flujo completo E2E sin errores de consola y ~60 fps en el Coliseo con 15 enemigos (headless con GPU). Los modos «Próximamente» (Supervivencia, Duelo) y las arenas (Templo, Pagoda, Jardines) llegarán en la Fase 1.
+
+## Motor 3D
+
+Three.js se carga desde CDN fijado a **r160** como módulos ES con import map en `index.html` (`https://unpkg.com/three@0.160.0/build/three.module.js` y `three/addons/` para GLTFLoader, misma versión). Si unpkg deja de funcionar, index.html documenta el espejo equivalente de jsDelivr. Si el motor no carga o el navegador no soporta WebGL, la página muestra un mensaje de error en español en lugar de una pantalla negra. Los GLB de `assets/props/` caen al builder procedural automáticamente si faltan, fallan o tardan más de 8 s en cargar.
+
+## GitHub Pages
+
+Juego publicado y jugable en:
+
+**https://traderxael.github.io/oriental-arena-warriors/**
+
+Servido como sitio estático desde `main` (raíz `/`), sin workflow de build. Todos los assets se referencian con rutas relativas (`assets/...`), por lo que funciona tal cual bajo el subpath de Pages.
+
 ## Controles
 
 | Tecla / acción      | Función                     |
@@ -34,18 +50,6 @@ npx serve .
 Luego abre <http://localhost:8000> en el navegador.
 
 > Abrir `index.html` con doble clic (`file://`) **no** está soportado: los navegadores bloquean la carga de recursos bajo `file://`. Usa siempre un servidor estático.
-
-## GitHub Pages
-
-El juego funciona en GitHub Pages tal cual: activa *Settings → Pages → Deploy from a branch* sobre `main` (raíz `/`). No requiere workflow de build ni configuración adicional.
-
-## Motor 3D
-
-Three.js se carga desde CDN fijado a **r160** como módulos ES con import map en `index.html` (`https://unpkg.com/three@0.160.0/build/three.module.js` y `three/addons/` para GLTFLoader, misma versión). Si unpkg deja de funcionar, index.html documenta el espejo equivalente de jsDelivr. Si el motor no carga o el navegador no soporta WebGL, la página muestra un mensaje de error en español en lugar de una pantalla negra.
-
-## Estado del proyecto
-
-MVP en desarrollo. Ya disponible: scaffold del repo y flujo de menú principal (título → modo → héroe → arena → HUD), y el Coliseo del Sol Naciente 3D (arena circular con gradas, arcadas, puertas y antorchas; cámara orbital lenta). Modos y arenas marcados como "Próximamente" (Supervivencia, Duelo, Templo, Pagoda, Jardines) llegarán en entregas posteriores.
 
 ## Créditos
 
