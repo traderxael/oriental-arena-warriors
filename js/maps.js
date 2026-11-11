@@ -17,7 +17,10 @@
    procedural equivalente y el juego funciona igual.
    ============================================================ */
 import * as THREE from 'three';
+import { Sky } from 'three/addons/objects/Sky.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Assets } from './assets.js';
+import { Textures } from './textures.js';
 
 const RADIUS = 38;
 const PILLAR_RING = 34;
@@ -80,6 +83,34 @@ function buildProceduralArch() {
   return g;
 }
 
+function buildProceduralCherry() {
+  const g = new THREE.Group();
+  g.name = 'fallback:cherry';
+  const trunk = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.4, 2.8, 8), std('#4a3220', { roughness: 0.9 })));
+  trunk.position.y = 1.4;
+  g.add(trunk);
+  const bloom = std('#e8a7b8', { roughness: 0.95 });
+  [[0, 3.6, 0, 1.7], [1.1, 3.1, 0.5, 1.2], [-1.0, 3.2, -0.6, 1.25]].forEach(([x, y, z, r]) => {
+    const puff = shadowed(new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), bloom));
+    puff.position.set(x, y, z);
+    g.add(puff);
+  });
+  return g;
+}
+
+function buildProceduralColumn() {
+  const g = new THREE.Group();
+  g.name = 'fallback:column';
+  const shaft = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.52, 4.4, 12), std('#cbbd9d')));
+  shaft.position.y = 2.3;
+  const base = shadowed(new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.35, 1.3), std('#a1937a')));
+  base.position.y = 0.17;
+  const cap = shadowed(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, 1.2), std('#a1937a')));
+  cap.position.y = 4.65;
+  g.add(shaft, base, cap);
+  return g;
+}
+
 /* ---------- Construcción del Coliseo ---------- */
 
 const Maps = {
@@ -88,14 +119,14 @@ const Maps = {
    * Síncrono para la estructura; los props GLB se añaden cuando cargan
    * (o caen a su fallback procedural vía Assets.loadGLB).
    */
-  buildColosseum(scene) {
+  buildColosseum(scene, renderer) {
     const root = new THREE.Group();
     root.name = 'colosseum';
     const flames = [];
     const flickerLights = [];
 
     // --- Suelo: círculo de arena + anillos oscuros + emblema central ---
-    const floor = shadowed(new THREE.Mesh(new THREE.CircleGeometry(RADIUS + 12, 72), std('#c9a86a', { roughness: 1 })), false, true);
+    const floor = shadowed(new THREE.Mesh(new THREE.CircleGeometry(RADIUS + 12, 72), std('#c9a86a', { roughness: 1, map: Textures.sand(10, 10) })), false, true);
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = 0;
     root.add(floor);
@@ -124,7 +155,7 @@ const Maps = {
     root.add(outer);
 
     // --- Muro perimetral: cilindro abierto con 3 huecos (puertas) ---
-    const wallMat = std('#b9a982', { side: THREE.DoubleSide });
+    const wallMat = std('#b9a982', { side: THREE.DoubleSide, map: Textures.stone(12, 2) });
     const arcLen = (2 * Math.PI) / 3 - 2 * GATE_HALF_GAP;
     GATE_ANGLES.forEach((a) => {
       const seg = shadowed(new THREE.Mesh(
@@ -149,13 +180,19 @@ const Maps = {
     ];
     gradas.forEach(({ r, h, n, color }) => {
       const chord = 2 * r * Math.sin(Math.PI / n) - 0.6;
+      const parts = [];
+      const m = new THREE.Matrix4();
       for (let i = 0; i < n; i += 1) {
         const a = (i / n) * Math.PI * 2;
-        const box = shadowed(new THREE.Mesh(new THREE.BoxGeometry(chord, h, 2.5), std(color)));
-        box.position.set(r * Math.sin(a), h / 2 - 0.15, r * Math.cos(a));
-        box.rotation.y = a;
-        root.add(box);
+        const geo = new THREE.BoxGeometry(chord, h, 2.5);
+        m.makeRotationY(a);
+        m.setPosition(r * Math.sin(a), h / 2 - 0.15, r * Math.cos(a));
+        geo.applyMatrix4(m);
+        parts.push(geo);
       }
+      const merged = shadowed(new THREE.Mesh(mergeGeometries(parts), std(color, { map: Textures.stone(6, 2) })));
+      parts.forEach((g) => g.dispose());
+      root.add(merged);
     });
 
     // --- 2 niveles de arcadas: pilares + arcos de toro medio ---
@@ -171,22 +208,29 @@ const Maps = {
       { pillarH: 3.4, pillarW: 1.05, tube: 0.34, baseY: 4.6, color: '#c0b28e' },
     ];
     levels.forEach(({ pillarH, pillarW, tube, baseY, color }) => {
-      const pillarGeo = new THREE.BoxGeometry(pillarW, pillarH, pillarW);
+      const parts = [];
+      const m = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      const up = new THREE.Vector3(0, 1, 0);
+      const one = new THREE.Vector3(1, 1, 1);
       for (let i = 0; i < PILLAR_COUNT; i += 1) {
         const a = (i / PILLAR_COUNT) * Math.PI * 2;
-        const pillar = shadowed(new THREE.Mesh(pillarGeo, std(color)));
-        pillar.position.set(PILLAR_RING * Math.sin(a), baseY + pillarH / 2, PILLAR_RING * Math.cos(a));
-        pillar.rotation.y = a;
-        root.add(pillar);
+        const geo = new THREE.BoxGeometry(pillarW, pillarH, pillarW);
+        q.setFromAxisAngle(up, a);
+        m.compose(new THREE.Vector3(PILLAR_RING * Math.sin(a), baseY + pillarH / 2, PILLAR_RING * Math.cos(a)), q, one);
+        geo.applyMatrix4(m);
+        parts.push(geo);
       }
-      const arcGeo = new THREE.TorusGeometry(arcR, tube, 8, 22, Math.PI);
       midAngles.forEach((a) => {
-        const arc = shadowed(new THREE.Mesh(arcGeo, std(color)));
-        // El plano del arco contiene la cuerda (tangente) y es vertical
-        arc.position.set(PILLAR_RING * Math.sin(a), baseY + pillarH, PILLAR_RING * Math.cos(a));
-        arc.rotation.y = a + Math.PI / 2;
-        root.add(arc);
+        const geo = new THREE.TorusGeometry(arcR, tube, 8, 22, Math.PI);
+        q.setFromAxisAngle(up, a + Math.PI / 2);
+        m.compose(new THREE.Vector3(PILLAR_RING * Math.sin(a), baseY + pillarH, PILLAR_RING * Math.cos(a)), q, one);
+        geo.applyMatrix4(m);
+        parts.push(geo);
       });
+      const merged = shadowed(new THREE.Mesh(mergeGeometries(parts), std(color, { map: Textures.stone(3, 2) })));
+      parts.forEach((g) => g.dispose());
+      root.add(merged);
     });
 
     // --- Puertas: principal + 2 laterales (con spawnPoints) ---
@@ -280,6 +324,46 @@ const Maps = {
       flickerLights.push(light);
     });
 
+    // --- Vegetación y columnas: GLBs commiteados que antes no se instanciaban ---
+    const obstacles = [];
+    [Math.PI / 3, Math.PI, (5 * Math.PI) / 3].forEach((a) => {
+      const x = 35 * Math.sin(a);
+      const z = 35 * Math.cos(a);
+      obstacles.push({ x, z, r: 1.3 });
+      Assets.loadGLB('assets/props/cherry-tree.glb', buildProceduralCherry).then((tree) => {
+        scene.add(placeOnGround(tree, x, z, 6.5));
+      });
+    });
+    GATE_ANGLES.forEach((a) => {
+      [-0.22, 0.22].forEach((off) => {
+        const ja = a + off;
+        const x = 36 * Math.sin(ja);
+        const z = 36 * Math.cos(ja);
+        obstacles.push({ x, z, r: 0.8 });
+        Assets.loadGLB('assets/props/column.glb', buildProceduralColumn).then((col) => {
+          scene.add(placeOnGround(col, x, z, 5.2));
+        });
+      });
+    });
+
+    // --- Cielo físico (Sky addon) + environment map para metales ---
+    const sky = new Sky();
+    sky.scale.setScalar(4500);
+    const skyU = sky.material.uniforms;
+    skyU.turbidity.value = 6;
+    skyU.rayleigh.value = 1.8;
+    skyU.mieCoefficient.value = 0.005;
+    skyU.mieDirectionalG.value = 0.8;
+    skyU.sunPosition.value.copy(new THREE.Vector3(34, 46, 20).normalize());
+    if (renderer) {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const skyScene = new THREE.Scene();
+      skyScene.add(sky);
+      scene.environment = pmrem.fromScene(skyScene, 0, 0.1, 10000).texture;
+      pmrem.dispose();
+    }
+    root.add(sky);
+
     // --- Luces de la escena: sol cálido + ambiente hemisférico ---
     const hemi = new THREE.HemisphereLight('#fff3d6', '#5a4632', 0.8);
     root.add(hemi);
@@ -309,6 +393,8 @@ const Maps = {
       radius: RADIUS,
       flames,
       flickerLights,
+      obstacles,
+      sun,
     };
   },
 };

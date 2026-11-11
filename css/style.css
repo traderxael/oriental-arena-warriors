@@ -225,6 +225,37 @@ body {
   gap: 0.9rem;
 }
 
+.pause-quality {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 1.4rem;
+  padding: 0.5rem 1rem;
+  background: rgba(16, 12, 9, 0.55);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 4px;
+}
+.pause-quality label {
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  color: #efe4c3;
+}
+.pause-quality select {
+  font-family: var(--fuente);
+  font-size: 0.85rem;
+  color: var(--papel);
+  background: var(--tinta-suave);
+  border: 2px solid var(--dorado-oscuro);
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+}
+.pause-quality select:hover,
+.pause-quality select:focus-visible {
+  border-color: var(--dorado);
+  outline: none;
+}
+
 .btn {
   font-family: var(--fuente);
   font-size: 1rem;

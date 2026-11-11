@@ -52,13 +52,26 @@ function dampAngle(current, target, lambda, dt) {
 }
 
 /** Devuelve la posición con su radio en XZ limitado a la arena. */
-function clampToArena(pos, radius) {
+function clampToArena(pos, radius, obstacles) {
   const max = Math.max((radius || 38) - PLAYER_RADIUS, 1);
   const r = Math.hypot(pos.x, pos.z);
   if (r > max) {
     const s = max / r;
     pos.x *= s;
     pos.z *= s;
+  }
+  if (obstacles) {
+    for (const ob of obstacles) {
+      const dx = pos.x - ob.x;
+      const dz = pos.z - ob.z;
+      const d = Math.hypot(dx, dz);
+      const min = ob.r + PLAYER_RADIUS;
+      if (d < min && d > 1e-6) {
+        const s = min / d;
+        pos.x = ob.x + dx * s;
+        pos.z = ob.z + dz * s;
+      }
+    }
   }
   return pos;
 }
@@ -70,6 +83,7 @@ function createPlayer(heroId, scene, map) {
     hero = HEROES[0];
   }
   const arenaRadius = map && typeof map.radius === 'number' ? map.radius : 38;
+  const obstacles = map && Array.isArray(map.obstacles) ? map.obstacles : null;
 
   const group = hero.builder();
   group.position.set(0, 0, 0);
@@ -146,7 +160,7 @@ function createPlayer(heroId, scene, map) {
       } else if (moving) {
         group.position.addScaledVector(move, hero.stats.speed * dt);
       }
-      clampToArena(group.position, arenaRadius);
+      clampToArena(group.position, arenaRadius, obstacles);
 
       // Rotación hacia la dirección de movimiento (o del dash)
       const facing = this.dashTime > 0 ? this.dashDir : (moving ? move : null);

@@ -8,6 +8,10 @@
    cargados antes que este módulo.
    ============================================================ */
 import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Assets } from './assets.js';
 import { Maps } from './maps.js';
 import { HEROES } from './heroes.js';
@@ -15,6 +19,8 @@ import { createPlayer, updateCamera } from './player.js';
 import { Combat } from './combat.js';
 import { Enemies } from './enemies.js';
 import { Modes } from './modes.js';
+import { Quality } from './quality.js';
+import { VFX } from './vfx.js';
 
 /* Comprobación defensiva de Audio (js/audio.js, binding léxico global). */
 function sfx(name) {
@@ -122,6 +128,49 @@ let arena = null;        // { scene, camera, renderer, flames, flickerLights, ra
 let arenaClock = null;
 let lastHpShown = -1;
 
+/* ---------- Calidad gráfica + postprocesado ---------- */
+
+/** (Re)construye el composer de bloom según el preset activo. */
+function rebuildComposer() {
+  if (!arena) return;
+  const preset = Quality.preset();
+  if (arena.composer) {
+    arena.composer.dispose();
+    arena.composer = null;
+  }
+  if (!preset.bloom) return;
+  const size = new THREE.Vector2();
+  arena.renderer.getSize(size);
+  const composer = new EffectComposer(arena.renderer);
+  composer.setPixelRatio(arena.renderer.getPixelRatio());
+  composer.setSize(Math.max(1, size.x), Math.max(1, size.y));
+  composer.addPass(new RenderPass(arena.scene, arena.camera));
+  // Bloom a media resolución: el mip-chain interno ya reduce el coste
+  const bloom = new UnrealBloomPass(new THREE.Vector2(Math.max(1, size.x / 2), Math.max(1, size.y / 2)), 0.35, 0.6, 0.82);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+  arena.composer = composer;
+}
+
+/** Aplica el preset de Quality al renderer, sombras, pétalos y composer. */
+function applyQuality() {
+  if (!arena) return;
+  const preset = Quality.preset();
+  arena.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, preset.pixelRatio));
+  if (arena.sun) {
+    arena.sun.shadow.mapSize.set(preset.shadow, preset.shadow);
+    if (arena.sun.shadow.map) {
+      arena.sun.shadow.map.dispose();
+      arena.sun.shadow.map = null;
+    }
+  }
+  VFX.setPetals(preset.petals);
+  rebuildComposer();
+  resizeArena();
+  const select = document.getElementById('select-quality');
+  if (select && select.value !== Quality.level) select.value = Quality.level;
+}
+
 function startArena() {
   const canvas = document.getElementById('game-canvas');
   if (!canvas) return;
@@ -131,14 +180,16 @@ function startArena() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#efd9a7');
-    scene.fog = new THREE.Fog('#efd9a7', 90, 240);
+    scene.fog = new THREE.Fog('#e8c98f', 90, 240);
 
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400);
 
-    const built = Maps.buildColosseum(scene);
+    const built = Maps.buildColosseum(scene, renderer);
     arena = {
       scene,
       camera,
@@ -147,12 +198,19 @@ function startArena() {
       flickerLights: built.flickerLights,
       bounds: built.bounds,
       spawnPoints: built.spawnPoints,
+      obstacles: built.obstacles,
+      sun: built.sun,
       radius: built.radius,
       rafId: null,
       player: null,
+      composer: null,
     };
     window.__arena = arena; // depuración
     console.log('Coliseo construido. Radio de colisión: ' + arena.radius + ' — spawn points: ' + arena.spawnPoints.length);
+
+    VFX.init(scene);
+    Quality.onChange(() => applyQuality());
+    applyQuality();
 
     window.addEventListener('resize', resizeArena);
   }
@@ -177,6 +235,7 @@ function stopArena() {
   removeEnemies();
   Combat.clearFloaters();
   clearHitBursts();
+  VFX.clearTransient();
   removePlayer();
   const canvas = document.getElementById('game-canvas');
   if (canvas) canvas.classList.add('hidden');
@@ -271,6 +330,7 @@ function damagePlayer(damage) {
   p.hp = Math.max(0, p.hp - Math.max(0, Number(damage) || 0));
   sfx('hurt');
   flashDamageVignette();
+  VFX.addShake(0.15);
   lastHpShown = -1;
   syncHpHud();
   if (p.hp <= 0) {
@@ -423,6 +483,10 @@ function resizeArena() {
   arena.renderer.setSize(w, h, false);
   arena.camera.aspect = w / Math.max(h, 1);
   arena.camera.updateProjectionMatrix();
+  if (arena.composer) {
+    arena.composer.setPixelRatio(arena.renderer.getPixelRatio());
+    arena.composer.setSize(w, h);
+  }
 }
 
 function animateArena() {
@@ -442,11 +506,13 @@ function animateArena() {
       arena.player.update(dt, readPlayerInput(), arena.camera);
       Combat.tickAttackAnim(arena.player, t);
       updateCamera(dt, arena.camera, arena.player, arena, false);
+      VFX.applyShake(arena.camera, dt);
       syncHpHud();
       Combat.updateSpecialHud(arena.player, t);
     }
     Combat.updateFloaters(dt);
     updateHitParticles(dt);
+    VFX.update(dt, t);
 
     // Enemigos: IA, separación, limpieza de muertos + spawn escalonado
     if (arena.player) {
@@ -468,7 +534,11 @@ function animateArena() {
   }
   // En PAUSE el update queda congelado: sólo se re-renderiza el fotograma.
 
-  arena.renderer.render(arena.scene, arena.camera);
+  if (arena.composer) {
+    arena.composer.render();
+  } else {
+    arena.renderer.render(arena.scene, arena.camera);
+  }
 }
 
 /* ---------- Navegación ---------- */
@@ -535,6 +605,13 @@ function bindUI() {
   document.getElementById('btn-resume').addEventListener('click', () => go('hud', 'PLAY'));
   document.getElementById('btn-pause-quit').addEventListener('click', () => { stopArena(); go('title', 'TITLE'); });
 
+  // Calidad gráfica (persistente en localStorage; ?quality= tiene prioridad)
+  const qualitySelect = document.getElementById('select-quality');
+  if (qualitySelect) {
+    qualitySelect.value = Quality.level;
+    qualitySelect.addEventListener('change', () => Quality.set(qualitySelect.value));
+  }
+
   // Fin de partida
   document.getElementById('btn-retry').addEventListener('click', () => startGame());
   document.getElementById('btn-gameover-quit').addEventListener('click', () => { stopArena(); go('title', 'TITLE'); });
@@ -550,6 +627,10 @@ function bindUI() {
     const y = Number(d.y) || 1.4;
     const z = Number(d.z) || 0;
     spawnHitParticles(x, y, z);
+    if (d.killed) {
+      spawnHitParticles(x, y + 0.3, z); // brasas extra al morir
+      VFX.addShake(0.08);
+    }
     if (arena && arena.scene) {
       Combat.spawnDamageFloater(arena.scene, { x, y, z }, d.damage, { killed: !!d.killed });
     }
@@ -584,12 +665,15 @@ function bindUI() {
       return;
     }
     if (code === 'ShiftLeft' || code === 'ShiftRight') {
-      if (state === 'PLAY' && arena && arena.player && arena.player.dash()) sfx('dash');
+      if (state === 'PLAY' && arena && arena.player && arena.player.dash()) {
+        sfx('dash');
+        VFX.dashTrail(arena.player.group.position, arena.player.dashDir);
+      }
       return;
     }
     if (code === 'KeyQ') {
       if (state === 'PLAY' && arena && arena.player && arena.player.alive) {
-        Combat.trySpecial(arena.player, enemies, playTime);
+        if (Combat.trySpecial(arena.player, enemies, playTime)) VFX.addShake(0.25);
       }
     }
   });
