@@ -49,17 +49,17 @@ rigging de Rodin (plantilla humana, 52 huesos, clips de animación incluidos).
 Los outputs de Rodin son propiedad del usuario de la cuenta según sus términos de
 servicio; se commitean aquí como assets del proyecto.
 
-- `akane.glb` — ronin femenina (héroe jugable). 25.4k tris, 1.9 MB.
-- `goro.glb` — samurái pesado (héroe jugable). 28.9k tris, 2.1 MB.
-- `ashigaru.glb` — base enemiga compartida (bandido/lancero/ronin por tinte). 23.1k tris, 1.7 MB.
-- `oni.glb` — brute enemigo. 24.6k tris, 1.7 MB.
+- `akane.glb` — ronin femenina (héroe jugable). 21.0k tris, 1.6 MB.
+- `goro.glb` — samurái pesado (héroe jugable). 21.0k tris, 1.6 MB.
+- `ashigaru.glb` — base enemiga compartida (bandido/lancero/ronin por tinte). 9.5k tris, 0.9 MB.
+- `oni.glb` — brute enemigo. 12.5k tris, 1.0 MB.
 
 Cambios realizados tras la generación: rigging (52 huesos + clips
 `HumanSpOffensiveIdle`, `HumanSpJogging`/`HumanSpWalking`, `HumanSpDying`),
 fusión de influencias de skin a 4 por vértice (requisito de Three.js),
-simplificación de malla (meshoptimizer), cuantización de atributos
+simplificación de malla (meshoptimizer, modo permisivo + compactación), cuantización de atributos
 (KHR_mesh_quantization) y texturas WebP (1024 héroes / 512 enemigos).
-Presupuesto total de descarga: 7.5 MB (tope del plan: 10 MB).
+Presupuesto total de descarga: 5.1 MB (tope del plan: 10 MB).
 Coste en créditos Rodin: 4.0 de un tope de 12 (4 generaciones × 0.5 + 4 rigs × 0.5).
 Las armas siguen siendo procedurales / `assets/props/katana.glb`.
 Si un GLB de personaje falta o falla, el juego usa el builder procedural
