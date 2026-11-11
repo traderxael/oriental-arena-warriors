@@ -55,10 +55,72 @@
    Módulo ES: importa THREE desde el CDN fijado a 0.160.0 (import map).
    ============================================================ */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Assets } from './assets.js';
 import { Characters } from './characters.js';
 
 const KATANA_GLB = 'assets/props/katana.glb';
+const SHARED_WEAPON_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.65 });
+SHARED_WEAPON_MAT.userData = { shared: true };
+const weaponGeoCache = new Map();
+let contactShadowGeo = null;
+let contactShadowMat = null;
+
+function getContactShadowMesh() {
+  if (!contactShadowGeo) {
+    contactShadowGeo = new THREE.CircleGeometry(0.55, 16);
+    contactShadowGeo.rotateX(-Math.PI / 2);
+    contactShadowGeo.userData = { shared: true };
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(32, 32, 4, 32, 32, 30);
+    grad.addColorStop(0, 'rgba(20, 14, 10, 0.46)');
+    grad.addColorStop(0.65, 'rgba(20, 14, 10, 0.2)');
+    grad.addColorStop(1, 'rgba(20, 14, 10, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.userData = { shared: true };
+    contactShadowMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+    contactShadowMat.userData = { shared: true };
+  }
+  const disc = new THREE.Mesh(contactShadowGeo, contactShadowMat);
+  disc.name = 'contactShadow';
+  disc.position.y = 0.02;
+  disc.castShadow = false;
+  disc.receiveShadow = false;
+  return disc;
+}
+
+function bakeWeaponGeometry(sourceRoot) {
+  sourceRoot.updateMatrixWorld(true);
+  const parts = [];
+  sourceRoot.traverse((n) => {
+    if (!n || !n.isMesh || !n.geometry) return;
+    const g = n.geometry.index ? n.geometry.toNonIndexed() : n.geometry.clone();
+    g.applyMatrix4(n.matrixWorld);
+    for (const name of Object.keys(g.attributes)) {
+      if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+    }
+    if (!g.getAttribute('normal')) g.computeVertexNormals();
+    const count = g.getAttribute('position').count;
+    const mat = Array.isArray(n.material) ? n.material[0] : n.material;
+    const col = (mat && mat.color) ? mat.color : new THREE.Color('#cfd2d6');
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i += 1) {
+      colors[i * 3] = col.r;
+      colors[i * 3 + 1] = col.g;
+      colors[i * 3 + 2] = col.b;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    parts.push(g);
+  });
+  const merged = mergeGeometries(parts);
+  parts.forEach((p) => p.dispose());
+  merged.userData = { shared: true };
+  return merged;
+}
 const SEPARATION_RADIUS = 0.9;      // m — repulsión entre enemigos
 const WINDUP_TIME = 0.4;            // s de windup antes del golpe
 const WINDUP_RANGE_SLACK = 1.4;     // el golpe conecta hasta range * slack
@@ -72,13 +134,14 @@ const CORPSE_DISSOLVE_START = 1.0;  // últimos 0.4 s: disolución progresiva
 const MAX_TOTAL_MIXERS = 26;        // presupuesto global (jugador + enemigos + cadáveres)
 
 const RIG_SPECS = {
-  ronin: { id: 'ashigaru', height: 1.75, tint: { key: 'ronin', color: '#b8b2a6' } },
-  bandido: { id: 'ashigaru', height: 1.68, tint: { key: 'bandido', color: '#e28044' } },
-  lancero: { id: 'ashigaru', height: 1.76, tint: { key: 'lancero', color: '#6482bc' } },
-  brute: { id: 'oni', height: 2.15, tint: null },
+  ronin: { id: 'ashigaru', height: 1.75, castShadow: false, tint: { key: 'ronin', color: '#b8b2a6' } },
+  bandido: { id: 'ashigaru', height: 1.68, castShadow: false, tint: { key: 'bandido', color: '#e28044' } },
+  lancero: { id: 'ashigaru', height: 1.76, castShadow: false, tint: { key: 'lancero', color: '#6482bc' } },
+  brute: { id: 'oni', height: 2.15, castShadow: true, tint: null },
   maestro: {
     id: 'goro',
     height: 1.88,
+    castShadow: true,
     tint: { key: 'maestro', color: '#382f22', emissive: '#543c0c', emissiveIntensity: 0.35, metalness: 0.52, roughness: 0.36 },
   },
 };
@@ -195,7 +258,7 @@ function buildMachete(bladeLength) {
   return wrapper;
 }
 
-/** Pivote de arma en la mano derecha (el GLB del ronin lo sustituye in situ). */
+/** Pivote de arma en la mano derecha (1 draw call compartido por tipo de arma). */
 function createWeaponPivot(weapon, x, y, z, rotZ) {
   const holder = new THREE.Group();
   holder.name = 'weapon';
@@ -203,12 +266,21 @@ function createWeaponPivot(weapon, x, y, z, rotZ) {
   holder.userData.weaponLength = weaponLengths[weapon] || 0.72;
   holder.position.set(x, y, z);
   holder.rotation.z = rotZ;
-  let built;
-  if (weapon === 'katana') built = buildShortKatana(0.95);
-  else if (weapon === 'machete') built = buildMachete(0.72);
-  else if (weapon === 'spear') built = buildSpear(2.35);
-  else built = buildKanabo(1.35);
-  holder.add(built);
+  let geo = weaponGeoCache.get(weapon);
+  if (!geo) {
+    let raw;
+    if (weapon === 'katana') raw = buildShortKatana(0.95);
+    else if (weapon === 'machete') raw = buildMachete(0.72);
+    else if (weapon === 'spear') raw = buildSpear(2.35);
+    else raw = buildKanabo(1.35);
+    geo = bakeWeaponGeometry(raw);
+    Assets.disposeObject(raw);
+    weaponGeoCache.set(weapon, geo);
+  }
+  const single = new THREE.Mesh(geo, SHARED_WEAPON_MAT);
+  single.castShadow = false;
+  single.receiveShadow = false;
+  holder.add(single);
   return holder;
 }
 
@@ -219,22 +291,31 @@ function alignLongestAxisToY(obj) {
   else obj.rotation.x = -Math.PI / 2;
 }
 
-/** Sustituye el arma del ronin/maestro por el GLB de katana (empuñadura en la mano). Nunca lanza. */
+/** Sustituye el arma del ronin/maestro por el GLB de katana fusionado a 1 malla. Nunca lanza. */
 function attachRoninWeaponGLB(group) {
   Assets.loadGLB(KATANA_GLB, () => buildShortKatana(0.95)).then((glb) => {
     try {
       const holder = group.getObjectByName('weapon');
       if (!holder) return;
-      alignLongestAxisToY(glb);
-      const size = new THREE.Box3().setFromObject(glb).getSize(new THREE.Vector3());
-      const len = Math.max(size.x, size.y, size.z);
-      if (len > 0.001) glb.scale.setScalar(glb.scale.x * (0.95 / len));
-      const centered = new THREE.Box3().setFromObject(glb);
-      const c = centered.getCenter(new THREE.Vector3());
-      glb.position.set(-c.x, -centered.min.y - 0.95 * 0.14, -c.z);
+      let geo = weaponGeoCache.get('katana:glb');
+      if (!geo) {
+        alignLongestAxisToY(glb);
+        const size = new THREE.Box3().setFromObject(glb).getSize(new THREE.Vector3());
+        const len = Math.max(size.x, size.y, size.z);
+        if (len > 0.001) glb.scale.setScalar(glb.scale.x * (0.95 / len));
+        const centered = new THREE.Box3().setFromObject(glb);
+        const c = centered.getCenter(new THREE.Vector3());
+        glb.position.set(-c.x, -centered.min.y - 0.95 * 0.14, -c.z);
+        geo = bakeWeaponGeometry(glb);
+        weaponGeoCache.set('katana:glb', geo);
+      }
+      Assets.disposeObject(glb);
       Assets.disposeObject(holder);
       holder.clear();
-      holder.add(glb);
+      const single = new THREE.Mesh(geo, SHARED_WEAPON_MAT);
+      single.castShadow = false;
+      single.receiveShadow = false;
+      holder.add(single);
     } catch (err) {
       console.warn('enemies: no se pudo aplicar el GLB de katana (' +
         (err && err.message ? err.message : err) + '). Se mantiene el arma procedural.');
@@ -672,10 +753,16 @@ function spawn(type, wave, map, scene) {
     Characters.upgrade(group, rigSpec.id, {
       height: rigSpec.height,
       tint: rigSpec.tint,
+      castShadow: rigSpec.castShadow,
       fallback: builder,
       isAlive: () => !enemy._disposed && enemy.alive,
     }).then((rig) => {
-      if (rig && !enemy._disposed && enemy.alive) enemy.rig = rig;
+      if (rig && !enemy._disposed && enemy.alive) {
+        enemy.rig = rig;
+        if (rigSpec.castShadow === false) {
+          group.add(getContactShadowMesh());
+        }
+      }
     });
   }
 

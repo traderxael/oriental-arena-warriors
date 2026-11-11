@@ -21,9 +21,50 @@
    Módulo ES: importa THREE desde el CDN fijado a 0.160.0 (import map).
    ============================================================ */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Assets } from './assets.js';
 
 const KATANA_GLB = 'assets/props/katana.glb';
+const SHARED_WEAPON_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.38, metalness: 0.72 });
+SHARED_WEAPON_MAT.userData = { shared: true };
+
+function bakeSingleMeshWeapon(sourceRoot) {
+  try {
+    sourceRoot.updateMatrixWorld(true);
+    const parts = [];
+    sourceRoot.traverse((n) => {
+      if (!n || !n.isMesh || !n.geometry) return;
+      const g = n.geometry.index ? n.geometry.toNonIndexed() : n.geometry.clone();
+      g.applyMatrix4(n.matrixWorld);
+      for (const name of Object.keys(g.attributes)) {
+        if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+      }
+      if (!g.getAttribute('normal')) g.computeVertexNormals();
+      const count = g.getAttribute('position').count;
+      const mat = Array.isArray(n.material) ? n.material[0] : n.material;
+      const col = (mat && mat.color) ? mat.color : new THREE.Color('#cfd2d6');
+      const colors = new Float32Array(count * 3);
+      for (let i = 0; i < count; i += 1) {
+        colors[i * 3] = col.r;
+        colors[i * 3 + 1] = col.g;
+        colors[i * 3 + 2] = col.b;
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      parts.push(g);
+    });
+    if (!parts.length) return sourceRoot;
+    const merged = mergeGeometries(parts);
+    parts.forEach((p) => p.dispose());
+    merged.userData = { shared: false };
+    const single = new THREE.Mesh(merged, SHARED_WEAPON_MAT);
+    single.castShadow = false;
+    single.receiveShadow = false;
+    return single;
+  } catch (_err) {
+    sourceRoot.traverse((n) => { if (n.isMesh) { n.castShadow = false; n.receiveShadow = false; } });
+    return sourceRoot;
+  }
+}
 
 /* ---------- Materiales y helpers ---------- */
 
@@ -69,9 +110,11 @@ function attachWeaponGLB(group, weaponLength) {
       const centered = new THREE.Box3().setFromObject(glb);
       const c = centered.getCenter(new THREE.Vector3());
       glb.position.set(-c.x, -centered.min.y - weaponLength * 0.14, -c.z);
+      const baked = bakeSingleMeshWeapon(glb);
+      Assets.disposeObject(glb);
       Assets.disposeObject(holder);
       holder.clear();
-      holder.add(glb);
+      holder.add(baked);
     } catch (err) {
       console.warn('heroes: no se pudo aplicar el GLB de katana (' +
         (err && err.message ? err.message : err) + '). Se mantiene el arma procedural.');

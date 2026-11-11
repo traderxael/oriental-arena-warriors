@@ -92,11 +92,20 @@ function paintWood(ctx, size) {
 }
 
 const PAINTERS = { sand: paintSand, stone: paintStone, wood: paintWood };
+const canvasCache = new Map();
+
+function getSharedCanvas(kind) {
+  if (canvasCache.has(kind)) return canvasCache.get(kind);
+  const c = makeCanvas(512, PAINTERS[kind]);
+  canvasCache.set(kind, c);
+  return c;
+}
 
 function get(kind, rx, ry) {
   const key = kind + ':' + rx + ':' + ry;
   if (cache.has(key)) return cache.get(key);
-  const tex = new THREE.CanvasTexture(makeCanvas(512, PAINTERS[kind]));
+  const tex = new THREE.CanvasTexture(getSharedCanvas(kind));
+  tex.userData = { shared: true };
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;

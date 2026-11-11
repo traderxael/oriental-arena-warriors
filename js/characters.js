@@ -136,6 +136,7 @@ function instantiate(id, opts = {}) {
   const targetHeight = Number(opts.height) > 0 ? Number(opts.height) : def.height;
   const yaw = typeof opts.yaw === 'number' ? opts.yaw : def.yaw;
   const tint = opts.tint || null;
+  const castShadow = opts.castShadow !== false;
 
   return Assets.loadGLTF(def.path, fallback).then((res) => {
     if (!res || res.isFallback || !res.scene) {
@@ -154,7 +155,7 @@ function instantiate(id, opts = {}) {
           boneNames.push(node.name);
         }
         if (node.isMesh) {
-          node.castShadow = true;
+          node.castShadow = castShadow;
           node.receiveShadow = true;
           if (node.isSkinnedMesh) node.frustumCulled = false;
           if (Array.isArray(node.material)) {

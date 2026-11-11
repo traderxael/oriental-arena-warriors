@@ -369,3 +369,25 @@ test('pickHandBone: override manual gana si existe; si no, cae al regex', () => 
   assert.equal(Logic.pickHandBone(['LeftHand', 'RightHand'], 'LeftHand'), 'LeftHand');
   assert.equal(Logic.pickHandBone(['LeftHand', 'RightHand'], 'NoExiste'), 'RightHand');
 });
+
+/* ---------- Helpers de rendimiento y auto-guard (Fase 7) ---------- */
+
+test('computePerfStats: calcula fps, avgMs y p95 sobre ventana de muestras', () => {
+  const samples = Array.from({ length: 20 }, (_, i) => (i === 19 ? 40 : 16));
+  const stats = Logic.computePerfStats(samples);
+  assert.equal(stats.count, 20);
+  assert.ok(stats.avgMs > 16 && stats.avgMs < 18);
+  assert.equal(stats.p95, 40);
+  assert.ok(stats.fps > 55 && stats.fps < 63);
+});
+
+test('computePerfStats: entrada vacía o inválida devuelve ceros seguros', () => {
+  assert.deepEqual(Logic.computePerfStats([]), { fps: 0, avgMs: 0, p95: 0, count: 0 });
+  assert.deepEqual(Logic.computePerfStats(null), { fps: 0, avgMs: 0, p95: 0, count: 0 });
+});
+
+test('shouldDowngradeQuality: dispara solo con >=120 frames y media >33 ms', () => {
+  assert.equal(Logic.shouldDowngradeQuality(new Array(119).fill(45)), false);
+  assert.equal(Logic.shouldDowngradeQuality(new Array(120).fill(33)), false);
+  assert.equal(Logic.shouldDowngradeQuality(new Array(120).fill(34)), true);
+});

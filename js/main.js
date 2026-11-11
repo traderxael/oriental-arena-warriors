@@ -21,6 +21,7 @@ import { Enemies } from './enemies.js';
 import { Modes } from './modes.js';
 import { Quality } from './quality.js';
 import { VFX } from './vfx.js';
+import { Characters } from './characters.js';
 import { HeroPreview } from './hero-preview.js';
 
 /* Comprobación defensiva de Audio (js/audio.js, binding léxico global). */
@@ -30,8 +31,12 @@ function sfx(name) {
   } catch (_err) { /* silencioso */ }
 }
 
+const URL_PARAMS = new URLSearchParams(window.location.search);
 // Dummies de prueba (Task 5): sólo con la URL ?debug=dummies. NO es contenido de juego.
-const DEBUG_DUMMIES = new URLSearchParams(window.location.search).get('debug') === 'dummies';
+const DEBUG_DUMMIES = URL_PARAMS.get('debug') === 'dummies';
+// Escenario de estrés (Fase 7): ?debug=stress mantiene 25 enemigos vivos simultáneos.
+const DEBUG_STRESS = URL_PARAMS.get('debug') === 'stress';
+const AUTOSTART = URL_PARAMS.get('autostart') === '1';
 
 // Expone THREE para consola/depuración y para que checkEngine()
 // y el resto del código clásico puedan inspeccionar la versión.
@@ -148,8 +153,13 @@ function rebuildComposer() {
   composer.setPixelRatio(arena.renderer.getPixelRatio());
   composer.setSize(Math.max(1, size.x), Math.max(1, size.y));
   composer.addPass(new RenderPass(arena.scene, arena.camera));
-  // Bloom a media resolución: el mip-chain interno ya reduce el coste
-  const bloom = new UnrealBloomPass(new THREE.Vector2(Math.max(1, size.x / 2), Math.max(1, size.y / 2)), 0.35, 0.6, 0.82);
+  const bScale = Number(preset.bloomScale) || 0.5;
+  const bloom = new UnrealBloomPass(
+    new THREE.Vector2(Math.max(1, Math.floor(size.x * bScale)), Math.max(1, Math.floor(size.y * bScale))),
+    0.35,
+    0.6,
+    0.82
+  );
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
   arena.composer = composer;
@@ -160,7 +170,11 @@ function applyQuality() {
   if (!arena) return;
   const preset = Quality.preset();
   arena.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, preset.pixelRatio));
+  const useShadows = preset.shadows !== false;
+  arena.renderer.shadowMap.enabled = useShadows;
+  arena.renderer.shadowMap.needsUpdate = true;
   if (arena.sun) {
+    arena.sun.castShadow = useShadows;
     arena.sun.shadow.mapSize.set(preset.shadow, preset.shadow);
     if (arena.sun.shadow.map) {
       arena.sun.shadow.map.dispose();
@@ -180,6 +194,7 @@ function startArena() {
 
   if (!arena) {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.info.autoReset = false;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -310,6 +325,28 @@ function spawnDebugDummies() {
   }
   window.__enemies = enemies;
   console.log('Dummies de depuración creados (?debug=dummies): 2 delante + 1 detrás.');
+}
+
+const STRESS_ROSTER = [
+  'ronin', 'ronin', 'ronin', 'ronin', 'ronin', 'ronin', 'ronin', 'ronin', 'ronin', 'ronin',
+  'bandido', 'bandido', 'bandido', 'bandido', 'bandido', 'bandido', 'bandido', 'bandido',
+  'lancero', 'lancero', 'lancero', 'lancero', 'lancero', 'lancero',
+  'brute',
+];
+
+function topUpStressEnemies() {
+  if (!arena) return;
+  let idx = enemies.length;
+  while (enemies.length < 25) {
+    const type = STRESS_ROSTER[idx % STRESS_ROSTER.length];
+    const e = Enemies.spawn(type, 5, arena, arena.scene);
+    const ring = 9 + (idx % 4) * 5.5;
+    const ang = (idx / 25) * Math.PI * 2;
+    e.group.position.set(Math.cos(ang) * ring, 0, Math.sin(ang) * ring);
+    enemies.push(e);
+    idx += 1;
+  }
+  window.__enemies = enemies;
 }
 
 /* ---------- Oleadas: lógica absorbida por Modes.startHorde (js/modes.js) ---------- */
@@ -463,6 +500,14 @@ function spawnPlayer() {
   if (DEBUG_DUMMIES) {
     mode = null; // los dummies son un objetivo de pruebas: sin modo activo
     spawnDebugDummies();
+  } else if (DEBUG_STRESS) {
+    mode = null;
+    arena.player.maxHp = 999999;
+    arena.player.hp = 999999;
+    lastHpShown = -1;
+    syncHpHud();
+    topUpStressEnemies();
+    console.log('Modo estrés activo (?debug=stress): 25 enemigos simultáneos.');
   } else {
     // El modo arranca la partida (Hordas: oleada 1; Supervivencia: timer +
     // orbes; Duelo: el maestro). onEnd lo usa Duelo al ganar para congelar.
@@ -513,6 +558,104 @@ function resizeArena() {
   }
 }
 
+/* ---------- Sonda de rendimiento (window.__perf) + auto-guard ---------- */
+
+const perfWindow = [];   // [{ tMs, dtMs }] últimos 1000 ms
+const guardWindow = [];  // últimos 120 dtMs en PLAY (tras warmup)
+let prevPerfNow = 0;
+let lastTexScanAt = -Infinity;
+let cachedTextureMB = 0;
+let autoDowngrades = 0;
+
+function estimateDecodedTextureMB(scene) {
+  if (!scene) return 0;
+  const seen = new Set();
+  let bytes = 0;
+  const addTex = (tex) => {
+    if (!tex || !tex.isTexture) return;
+    const src = tex.source;
+    const id = (src && src.uuid) || tex.uuid;
+    if (seen.has(id)) return;
+    seen.add(id);
+    const img = (src && src.data) || tex.image;
+    const w = Number(img && (img.width || img.videoWidth)) || 0;
+    const h = Number(img && (img.height || img.videoHeight)) || 0;
+    if (w > 0 && h > 0) bytes += w * h * 4;
+  };
+  addTex(scene.environment);
+  addTex(scene.background);
+  scene.traverse((node) => {
+    if (!node || !node.material) return;
+    const mats = Array.isArray(node.material) ? node.material : [node.material];
+    for (const m of mats) {
+      if (!m) continue;
+      for (const k of Object.keys(m)) {
+        const v = m[k];
+        if (v && v.isTexture) addTex(v);
+      }
+    }
+  });
+  return Math.round((bytes / (1024 * 1024)) * 100) / 100;
+}
+
+function recordPerfFrame(playing) {
+  const nowMs = performance.now();
+  const dtMs = prevPerfNow > 0 ? Math.min(nowMs - prevPerfNow, 1000) : 16.67;
+  prevPerfNow = nowMs;
+
+  perfWindow.push({ tMs: nowMs, dtMs });
+  const cutoff = nowMs - 1000;
+  while (perfWindow.length > 1 && perfWindow[0].tMs < cutoff) {
+    perfWindow.shift();
+  }
+
+  if (playing && playTime >= 1.5) {
+    guardWindow.push(dtMs);
+    if (guardWindow.length > 120) guardWindow.shift();
+    const shouldDrop = window.Logic && typeof window.Logic.shouldDowngradeQuality === 'function'
+      ? window.Logic.shouldDowngradeQuality(guardWindow, 33, 120)
+      : false;
+    if (!Quality.lockedByUrl && shouldDrop) {
+      if (Quality.downgrade()) {
+        autoDowngrades += 1;
+        guardWindow.length = 0;
+        console.info('Quality auto-guard: calidad reducida automáticamente a "' + Quality.level + '".');
+      } else {
+        guardWindow.length = 0;
+      }
+    }
+  }
+
+  if (arena && nowMs - lastTexScanAt >= 1000) {
+    lastTexScanAt = nowMs;
+    cachedTextureMB = estimateDecodedTextureMB(arena.scene);
+  }
+
+  const msList = perfWindow.map((s) => s.dtMs);
+  const stats = window.Logic && typeof window.Logic.computePerfStats === 'function'
+    ? window.Logic.computePerfStats(msList)
+    : { fps: 0, avgMs: 0, p95: 0 };
+  const rInfo = arena ? arena.renderer.info.render : { calls: 0, triangles: 0 };
+  const mInfo = arena ? arena.renderer.info.memory : { geometries: 0, textures: 0 };
+
+  window.__perf = {
+    fps: stats.fps,
+    avgMs: stats.avgMs,
+    p95: stats.p95,
+    calls: rInfo.calls,
+    triangles: rInfo.triangles,
+    memory: {
+      geometries: mInfo.geometries,
+      textures: mInfo.textures,
+      textureMB: cachedTextureMB,
+    },
+    mixers: Characters.activeMixerCount(),
+    enemies: enemies.length,
+    quality: Quality.level,
+    autoDowngrades,
+  };
+}
+
 function animateArena() {
   arena.rafId = requestAnimationFrame(animateArena);
   // Consumir el delta cada frame (evita un salto al reanudar tras la pausa),
@@ -542,6 +685,7 @@ function animateArena() {
     if (arena.player) {
       Enemies.updateAll(enemies, dt, arena.player.group.position, t, arena.player);
     }
+    if (DEBUG_STRESS) topUpStressEnemies();
     if (mode) mode.update(dt);
 
     // Llamas: escala y parpadeo del PointLight
@@ -558,11 +702,13 @@ function animateArena() {
   }
   // En PAUSE el update queda congelado: sólo se re-renderiza el fotograma.
 
+  arena.renderer.info.reset();
   if (arena.composer) {
     arena.composer.render();
   } else {
     arena.renderer.render(arena.scene, arena.camera);
   }
+  recordPerfFrame(playing);
 }
 
 /* ---------- Navegación ---------- */
@@ -761,7 +907,11 @@ function init() {
   Enemies.onPlayerDamage((damage) => damagePlayer(damage));
   Object.defineProperty(window, '__modeState', { get: () => (mode ? mode.state() : null) }); // depuración
   bindUI();
-  go('title', 'TITLE');
+  if (AUTOSTART) {
+    startGame();
+  } else {
+    go('title', 'TITLE');
+  }
 
   console.log('Oriental Arena Warriors — listo. Three.js r' + THREE.REVISION + ' cargado desde CDN (módulos ES + import map).');
 }

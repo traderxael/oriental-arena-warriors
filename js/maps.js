@@ -131,13 +131,16 @@ const Maps = {
     floor.position.y = 0;
     root.add(floor);
 
-    [10, 19, 28].forEach((r, i) => {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(r, r + 1.5, 64), std('#8a6f47'));
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.01 + i * 0.001;
-      ring.receiveShadow = true;
-      root.add(ring);
+    const ringParts = [10, 19, 28].map((r, i) => {
+      const g = new THREE.RingGeometry(r, r + 1.5, 64);
+      g.rotateX(-Math.PI / 2);
+      g.translate(0, 0.01 + i * 0.001, 0);
+      return g;
     });
+    const mergedRings = new THREE.Mesh(mergeGeometries(ringParts), std('#8a6f47'));
+    mergedRings.receiveShadow = true;
+    ringParts.forEach((g) => g.dispose());
+    root.add(mergedRings);
 
     const center = new THREE.Mesh(new THREE.CircleGeometry(4.4, 48), std('#a0342c', { roughness: 0.85 }));
     center.rotation.x = -Math.PI / 2;
@@ -233,8 +236,15 @@ const Maps = {
       root.add(merged);
     });
 
-    // --- Puertas: principal + 2 laterales (con spawnPoints) ---
+    // --- Puertas: principal + 2 laterales (con spawnPoints, geometrías fusionadas) ---
     const spawnPoints = [];
+    const jambParts = [];
+    const doorParts = [];
+    const trimParts = [];
+    const tmpM = new THREE.Matrix4();
+    const tmpQ = new THREE.Quaternion();
+    const upY = new THREE.Vector3(0, 1, 0);
+    const unitS = new THREE.Vector3(1, 1, 1);
     GATE_ANGLES.forEach((a, idx) => {
       const isMain = idx === 0;
       const gateColor = isMain ? '#a0342c' : '#8c3a30';
@@ -245,30 +255,41 @@ const Maps = {
       // Jambas de piedra flanqueando el hueco
       [-1, 1].forEach((side) => {
         const jambAngle = a + side * 0.115;
-        const jamb = shadowed(new THREE.Mesh(new THREE.BoxGeometry(1.7, 5.4, 1.7), std('#a1937a')));
-        jamb.position.set(RADIUS * Math.sin(jambAngle), 2.7, RADIUS * Math.cos(jambAngle));
-        jamb.rotation.y = jambAngle;
-        root.add(jamb);
+        const jg = new THREE.BoxGeometry(1.7, 5.4, 1.7);
+        tmpQ.setFromAxisAngle(upY, jambAngle);
+        tmpM.compose(new THREE.Vector3(RADIUS * Math.sin(jambAngle), 2.7, RADIUS * Math.cos(jambAngle)), tmpQ, unitS);
+        jg.applyMatrix4(tmpM);
+        jambParts.push(jg);
       });
 
       // Oscuridad interior de la puerta (plano que mira al centro)
-      const door = new THREE.Mesh(new THREE.PlaneGeometry(6.6, 4.8), new THREE.MeshBasicMaterial({ color: '#0d0b09' }));
-      door.position.set((RADIUS + 0.05) * sinA, 2.4, (RADIUS + 0.05) * cosA);
-      door.rotation.y = inward;
-      root.add(door);
+      const dg = new THREE.PlaneGeometry(6.6, 4.8);
+      tmpQ.setFromAxisAngle(upY, inward);
+      tmpM.compose(new THREE.Vector3((RADIUS + 0.05) * sinA, 2.4, (RADIUS + 0.05) * cosA), tmpQ, unitS);
+      dg.applyMatrix4(tmpM);
+      doorParts.push(dg);
 
       // Dintel de lacre con filete dorado
       const lintel = shadowed(new THREE.Mesh(new THREE.BoxGeometry(8.0, 0.85, 1.9), std(gateColor, { roughness: 0.7 })));
       lintel.position.set(RADIUS * sinA, 5.15, RADIUS * cosA);
       lintel.rotation.y = a;
-      const goldTrim = new THREE.Mesh(new THREE.BoxGeometry(8.1, 0.16, 1.92), std('#d4af37', { roughness: 0.4, metalness: 0.6 }));
-      goldTrim.position.set(RADIUS * sinA, 5.62, RADIUS * cosA);
-      goldTrim.rotation.y = a;
-      root.add(lintel, goldTrim);
+      root.add(lintel);
+
+      const tg = new THREE.BoxGeometry(8.1, 0.16, 1.92);
+      tmpQ.setFromAxisAngle(upY, a);
+      tmpM.compose(new THREE.Vector3(RADIUS * sinA, 5.62, RADIUS * cosA), tmpQ, unitS);
+      tg.applyMatrix4(tmpM);
+      trimParts.push(tg);
 
       // Punto de aparición dentro de la arena, frente a cada puerta
       spawnPoints.push(new THREE.Vector3((RADIUS - 6) * sinA, 0, (RADIUS - 6) * cosA));
     });
+    root.add(shadowed(new THREE.Mesh(mergeGeometries(jambParts), std('#a1937a'))));
+    root.add(new THREE.Mesh(mergeGeometries(doorParts), new THREE.MeshBasicMaterial({ color: '#0d0b09' })));
+    root.add(new THREE.Mesh(mergeGeometries(trimParts), std('#d4af37', { roughness: 0.4, metalness: 0.6 })));
+    jambParts.forEach((g) => g.dispose());
+    doorParts.forEach((g) => g.dispose());
+    trimParts.forEach((g) => g.dispose());
 
     // Puerta principal: intentar arco GLB decorativo (fallback: arco procedural)
     Assets.loadGLB('assets/props/arch.glb', buildProceduralArch).then((arch) => {

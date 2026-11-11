@@ -233,6 +233,49 @@
     return null;
   }
 
+  /* ---------- Helpers de rendimiento y auto-guard (Fase 7) ---------- */
+
+  function computePerfStats(samplesMs) {
+    if (!Array.isArray(samplesMs) || samplesMs.length === 0) {
+      return { fps: 0, avgMs: 0, p95: 0, count: 0 };
+    }
+    var valid = [];
+    var sum = 0;
+    for (var i = 0; i < samplesMs.length; i += 1) {
+      var v = Number(samplesMs[i]);
+      if (Number.isFinite(v) && v >= 0) {
+        valid.push(v);
+        sum += v;
+      }
+    }
+    if (!valid.length) return { fps: 0, avgMs: 0, p95: 0, count: 0 };
+    valid.sort(function (a, b) { return a - b; });
+    var avg = sum / valid.length;
+    var idx95 = Math.min(valid.length - 1, Math.floor(valid.length * 0.95));
+    var p95 = valid[idx95];
+    var fps = avg > 0 ? 1000 / avg : 0;
+    return {
+      fps: Math.round(fps * 10) / 10,
+      avgMs: Math.round(avg * 100) / 100,
+      p95: Math.round(p95 * 100) / 100,
+      count: valid.length,
+    };
+  }
+
+  function shouldDowngradeQuality(recentMs, thresholdMs, requiredFrames) {
+    var thresh = Number.isFinite(Number(thresholdMs)) ? Number(thresholdMs) : 33;
+    var need = Number.isFinite(Number(requiredFrames)) ? Number(requiredFrames) : 120;
+    if (!Array.isArray(recentMs) || recentMs.length < need) return false;
+    var start = recentMs.length - need;
+    var sum = 0;
+    for (var i = start; i < recentMs.length; i += 1) {
+      var v = Number(recentMs[i]);
+      if (!Number.isFinite(v)) return false;
+      sum += v;
+    }
+    return sum / need > thresh;
+  }
+
   return {
     waveComposition: waveComposition,
     enemyStats: enemyStats,
@@ -248,5 +291,7 @@
     clipRole: clipRole,
     stripRootMotion: stripRootMotion,
     pickHandBone: pickHandBone,
+    computePerfStats: computePerfStats,
+    shouldDowngradeQuality: shouldDowngradeQuality,
   };
 });
