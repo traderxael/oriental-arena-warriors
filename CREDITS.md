@@ -18,7 +18,7 @@ falla o tarda más de 8 s en cargar, el juego usa un builder procedural equivale
 - Título: Column
 - Fuente (URL): https://poly.pizza/m/wLubNpOTX4 — https://static.poly.pizza/5239f88f-e30b-452b-a19e-89745d580b1e.glb
 - Licencia: Public Domain (CC0) — https://creativecommons.org/publicdomain/zero/1.0/
-- Cambios realizados: ninguno (reservada para props de coliseo/templo; aún no se instancia en escena)
+- Cambios realizados: ninguno (×6 flanqueando las puertas del Coliseo, con colisionador circular)
 
 ### Arch (assets/props/arch.glb)
 - Autor: Quaternius
@@ -39,7 +39,31 @@ falla o tarda más de 8 s en cargar, el juego usa un builder procedural equivale
 - Título: Cherry tree
 - Fuente (URL): https://poly.pizza/m/1FSDzk-LRdA — https://static.poly.pizza/9deb3271-411a-476b-a01b-e82e27077e72.glb
 - Licencia: CC-BY 3.0 — https://creativecommons.org/licenses/by/3.0/ (atribución: "Cherry tree" by Poly by Google)
-- Cambios realizados: ninguno (reservada para el mapa Jardines; aún no se instancia en escena)
+- Cambios realizados: ninguno (×3 en el anillo interior del Coliseo, con colisionador circular)
+
+## Personajes generados con IA (assets/characters/)
+
+Generados el 2026-11-11 con [Hyper3D Rodin](https://hyper3d.ai) (API v2, tier Gen-2.5-Low)
+a partir de prompts de texto propios del proyecto, y riggeados con el endpoint de
+rigging de Rodin (plantilla humana, 52 huesos, clips de animación incluidos).
+Los outputs de Rodin son propiedad del usuario de la cuenta según sus términos de
+servicio; se commitean aquí como assets del proyecto.
+
+- `akane.glb` — ronin femenina (héroe jugable). 25.4k tris, 1.9 MB.
+- `goro.glb` — samurái pesado (héroe jugable). 28.9k tris, 2.1 MB.
+- `ashigaru.glb` — base enemiga compartida (bandido/lancero/ronin por tinte). 23.1k tris, 1.7 MB.
+- `oni.glb` — brute enemigo. 24.6k tris, 1.7 MB.
+
+Cambios realizados tras la generación: rigging (52 huesos + clips
+`HumanSpOffensiveIdle`, `HumanSpJogging`/`HumanSpWalking`, `HumanSpDying`),
+fusión de influencias de skin a 4 por vértice (requisito de Three.js),
+simplificación de malla (meshoptimizer), cuantización de atributos
+(KHR_mesh_quantization) y texturas WebP (1024 héroes / 512 enemigos).
+Presupuesto total de descarga: 7.5 MB (tope del plan: 10 MB).
+Coste en créditos Rodin: 4.0 de un tope de 12 (4 generaciones × 0.5 + 4 rigs × 0.5).
+Las armas siguen siendo procedurales / `assets/props/katana.glb`.
+Si un GLB de personaje falta o falla, el juego usa el builder procedural
+equivalente de `js/heroes.js` / `js/enemies.js` (fallback siempre jugable).
 
 Política de assets del proyecto: sólo se commitean assets bajo `assets/` con licencia CC0 o atribución registrada aquí. Si la descarga de un asset falla en cualquier momento, el juego cae a un builder 100% procedural y funciona igualmente.
 
