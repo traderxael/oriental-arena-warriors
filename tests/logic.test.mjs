@@ -188,3 +188,108 @@ test('writeBest: sanea valor y roundtrip con readBest', () => {
 test('writeBest: null storage no lanza', () => {
   assert.doesNotThrow(() => Logic.writeBest(null, 100));
 });
+
+// ---- Supervivencia / Duelo (v2) ----
+
+function mapStorage() {
+  const m = new Map();
+  return {
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => { m.set(k, String(v)); },
+    removeItem: (k) => { m.delete(k); },
+    _map: m,
+  };
+}
+
+test('survivalComposition: t=0 es oleada 1 con composición de waveComposition(1)', () => {
+  const c = Logic.survivalComposition(0);
+  const w1 = Logic.waveComposition(1);
+  assert.equal(c.wave, 1);
+  assert.equal(c.ronin, w1.ronin);
+  assert.equal(c.bandido, w1.bandido);
+  assert.equal(c.lancero, w1.lancero);
+  assert.equal(c.brute, w1.brute);
+  assert.equal(c.maxAlive, 8);
+});
+
+test('survivalComposition: la oleada avanza cada 40 s', () => {
+  assert.equal(Logic.survivalComposition(39.9).wave, 1);
+  assert.equal(Logic.survivalComposition(40).wave, 2);
+  assert.equal(Logic.survivalComposition(120).wave, 4);
+});
+
+test('survivalComposition: maxAlive = min(8+floor(t/30), 20)', () => {
+  assert.equal(Logic.survivalComposition(0).maxAlive, 8);
+  assert.equal(Logic.survivalComposition(30).maxAlive, 9);
+  assert.equal(Logic.survivalComposition(360).maxAlive, 20);
+  assert.equal(Logic.survivalComposition(3600).maxAlive, 20);
+});
+
+test('survivalComposition: counts coinciden con waveComposition de su oleada', () => {
+  for (const t of [0, 45, 200, 1000]) {
+    const c = Logic.survivalComposition(t);
+    const w = Logic.waveComposition(c.wave);
+    assert.deepEqual(
+      { ronin: c.ronin, bandido: c.bandido, lancero: c.lancero, brute: c.brute },
+      { ronin: w.ronin, bandido: w.bandido, lancero: w.lancero, brute: w.brute },
+    );
+  }
+});
+
+test('survivalComposition: entradas negativas/NaN se sanean a oleada 1', () => {
+  for (const bad of [-10, NaN, undefined]) {
+    const c = Logic.survivalComposition(bad);
+    assert.equal(c.wave, 1);
+    assert.ok(c.maxAlive >= 8);
+  }
+});
+
+test('survivalScore: kills*10 + floor(sec)*2 + pickups*25', () => {
+  assert.equal(Logic.survivalScore(12, 95.7, 3), 120 + 190 + 75);
+});
+
+test('survivalScore: entradas negativas dan entero ≥ 0', () => {
+  const s = Logic.survivalScore(-5, -10, -2);
+  assert.equal(s, 0);
+  assert.ok(Number.isInteger(s));
+});
+
+test('duelStats: valores exactos del maestro', () => {
+  assert.deepEqual(Logic.duelStats(), {
+    hp: 600, speed: 3.4, damage: 16, range: 2.8, attackCooldown: 1.1,
+  });
+});
+
+test('duelScore: victoria con vida y tiempo', () => {
+  assert.equal(Logic.duelScore(true, 300, 120), 500 + 1500 + 360);
+});
+
+test('duelScore: derrota sin bonus de victoria', () => {
+  assert.equal(Logic.duelScore(false, 0, 400), 0);
+});
+
+test('duelScore: bonus de tiempo se corta en 300 s', () => {
+  assert.equal(Logic.duelScore(true, 100, 900), 500 + 500 + 0);
+});
+
+test('duelScore: hp negativo se sanea a 0', () => {
+  assert.equal(Logic.duelScore(true, -50, 0), 500 + 0 + 600);
+});
+
+test('readBest/writeBest: claves por modo aisladas entre sí y de hordas', () => {
+  const s = mapStorage();
+  Logic.writeBest(s, 100);
+  Logic.writeBest(s, 200, 'oaw_best_survival');
+  Logic.writeBest(s, 300, 'oaw_best_duel');
+  assert.equal(Logic.readBest(s), 100);
+  assert.equal(Logic.readBest(s, 'oaw_best_survival'), 200);
+  assert.equal(Logic.readBest(s, 'oaw_best_duel'), 300);
+  assert.equal(s._map.size, 3);
+});
+
+test('writeBest: clave por modo roundtrip y saneo, hordas intacto', () => {
+  const s = mapStorage();
+  Logic.writeBest(s, 777.9, 'oaw_best_survival');
+  assert.equal(Logic.readBest(s, 'oaw_best_survival'), 777);
+  assert.equal(Logic.readBest(s), 0);
+});

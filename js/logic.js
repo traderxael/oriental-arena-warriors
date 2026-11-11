@@ -133,10 +133,10 @@
     return n;
   }
 
-  function readBest(storage) {
+  function readBest(storage, key) {
     try {
       if (!storage) return 0;
-      var raw = storage.getItem(BEST_KEY);
+      var raw = storage.getItem(key || BEST_KEY);
       if (raw == null) return 0;
       return sanitizeBest(JSON.parse(raw));
     } catch (_err) {
@@ -144,13 +144,48 @@
     }
   }
 
-  function writeBest(storage, value) {
+  function writeBest(storage, value, key) {
     try {
       if (!storage) return;
-      storage.setItem(BEST_KEY, String(sanitizeBest(value)));
+      storage.setItem(key || BEST_KEY, String(sanitizeBest(value)));
     } catch (_err) {
       // storage bloqueado (incognito) o sin cuota: ignorar
     }
+  }
+
+  // Supervivencia: la oleada sube por tiempo (cada 40 s), no por despeje.
+  function survivalComposition(elapsedSec) {
+    var t = Number(elapsedSec);
+    if (!Number.isFinite(t) || t < 0) t = 0;
+    var wave = 1 + Math.floor(t / 40);
+    var comp = waveComposition(wave);
+    return {
+      wave: wave,
+      ronin: comp.ronin,
+      bandido: comp.bandido,
+      lancero: comp.lancero,
+      brute: comp.brute,
+      maxAlive: Math.min(8 + Math.floor(t / 30), 20),
+    };
+  }
+
+  function survivalScore(kills, sec, pickups) {
+    var k = clampInt(kills, 0, 1000000);
+    var p = clampInt(pickups, 0, 1000000);
+    var t = Math.floor(Number(sec));
+    if (!Number.isFinite(t) || t < 0) t = 0;
+    return k * 10 + t * 2 + p * 25;
+  }
+
+  function duelStats() {
+    return { hp: 600, speed: 3.4, damage: 16, range: 2.8, attackCooldown: 1.1 };
+  }
+
+  function duelScore(won, hpLeft, sec) {
+    var hp = clampInt(hpLeft, 0, 1000000);
+    var t = Math.floor(Number(sec));
+    if (!Number.isFinite(t) || t < 0) t = 0;
+    return (won ? 500 : 0) + hp * 5 + Math.max(0, 300 - t) * 2;
   }
 
   return {
@@ -161,5 +196,9 @@
     scoreFor: scoreFor,
     readBest: readBest,
     writeBest: writeBest,
+    survivalComposition: survivalComposition,
+    survivalScore: survivalScore,
+    duelStats: duelStats,
+    duelScore: duelScore,
   };
 });
