@@ -240,8 +240,16 @@ function setSpecialHudName(hero) {
 
 function updateSpecialHud(player, now) {
   const cdEl = document.getElementById('hud-special-cd');
-  if (!cdEl) return;
+  const cooldown = Number(player && player.hero && player.hero.special && player.hero.special.cooldown) || 8;
   const remaining = ((player && player.specialCooldownUntil) || 0) - (Number(now) || 0);
+  const chargePct = remaining > 0
+    ? Math.max(0, Math.min(100, (1 - remaining / cooldown) * 100))
+    : 100;
+  const qiFill = document.getElementById('hud-qi-fill');
+  if (qiFill) qiFill.style.width = chargePct.toFixed(1) + '%';
+  const qiBar = document.getElementById('hud-qi');
+  if (qiBar) qiBar.setAttribute('aria-valuenow', String(Math.round(chargePct)));
+  if (!cdEl) return;
   if (remaining > 0) {
     cdEl.textContent = remaining.toFixed(1) + ' s';
     cdEl.classList.remove('ready');

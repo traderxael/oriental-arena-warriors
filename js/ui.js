@@ -12,6 +12,7 @@
 
 const ui = (() => {
   const SCREENS = ['title', 'mode', 'hero', 'map', 'pause', 'gameover', 'hud'];
+  let cachedHeroes = [];
 
   function screenEl(id) {
     return document.getElementById(id === 'hud' ? 'hud' : 'screen-' + id);
@@ -64,13 +65,15 @@ const ui = (() => {
    * Todo el contenido se inserta vía textContent/DOM API (sin innerHTML).
    */
   function setHeroCards(heroes) {
+    cachedHeroes = Array.isArray(heroes) ? heroes : [];
     const wrap = document.getElementById('hero-cards');
     if (!wrap) return;
     wrap.textContent = '';
-    heroes.forEach((hero) => {
+    cachedHeroes.forEach((hero, idx) => {
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'card hero-card';
+      card.style.setProperty('--stagger', String(idx));
       card.dataset.heroId = hero.id;
       card.setAttribute('role', 'option');
       card.setAttribute('aria-selected', 'false');
@@ -142,6 +145,22 @@ const ui = (() => {
       card.classList.toggle('selected', selected);
       card.setAttribute('aria-selected', selected ? 'true' : 'false');
     });
+    const hero = cachedHeroes.find((h) => h.id === heroId);
+    if (hero) {
+      const nameEl = document.getElementById('hero-preview-name');
+      const epithetEl = document.getElementById('hero-preview-epithet');
+      if (nameEl) nameEl.textContent = hero.name || '';
+      if (epithetEl) epithetEl.textContent = hero.epithet || '';
+      const st = hero.stats || {};
+      const setMetric = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(val);
+      };
+      setMetric('hpv-hp', st.hp != null ? st.hp : '—');
+      setMetric('hpv-dmg', st.damage != null ? st.damage : '—');
+      setMetric('hpv-rng', st.range != null ? st.range + ' m' : '—');
+      setMetric('hpv-wpn', hero.weapon || '—');
+    }
   }
 
   /** Formatea segundos como MM:SS (Tiempo en HUD y game over). */
@@ -183,6 +202,11 @@ const ui = (() => {
       const el = document.getElementById(id);
       if (el) el.textContent = String(value == null ? 0 : value);
     };
+    const seal = document.getElementById('go-seal');
+    if (seal) {
+      seal.textContent = s.won ? '勝' : '敗';
+      seal.classList.toggle('victory', !!s.won);
+    }
     const heading = document.querySelector('#screen-gameover .screen-heading');
     if (heading) {
       heading.textContent = s.won ? '¡Victoria!' : 'Has caído en la arena';
@@ -232,10 +256,15 @@ const ui = (() => {
     const timer = document.getElementById('hud-timer');
     if (hp) hp.style.width = '100%';
     const hpBar = document.getElementById('hud-hp');
-    if (hpBar) hpBar.setAttribute('aria-valuenow', '100');
-    if (qi) qi.style.width = '50%';
+    if (hpBar) {
+      hpBar.setAttribute('aria-valuenow', '100');
+      hpBar.classList.remove('low-hp', 'heal-flash');
+    }
+    const hpText = document.getElementById('hud-hp-text');
+    if (hpText) hpText.textContent = '100 / 100';
+    if (qi) qi.style.width = '100%';
     const qiBar = document.getElementById('hud-qi');
-    if (qiBar) qiBar.setAttribute('aria-valuenow', '50');
+    if (qiBar) qiBar.setAttribute('aria-valuenow', '100');
     if (wave) wave.textContent = '1';
     if (score) score.textContent = '0';
     if (timer) timer.textContent = '00:00';
@@ -245,8 +274,8 @@ const ui = (() => {
     if (bossFill) bossFill.style.width = '100%';
     const bossBar = document.getElementById('hud-boss-bar');
     if (bossBar) bossBar.setAttribute('aria-valuenow', '100');
-    const hpBarEl = document.getElementById('hud-hp');
-    if (hpBarEl) hpBarEl.classList.remove('heal-flash');
+    const bossHp = document.getElementById('hud-boss-hp');
+    if (bossHp) bossHp.textContent = '600 / 600';
   }
 
   return { showScreen, setHeroCards, selectHeroCard, setHudMode, showGameOver, showBanner, resetHud };

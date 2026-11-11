@@ -635,13 +635,15 @@ function startDuel(ctx) {
     return (won ? 500 : 0) + Math.max(0, Math.round(hpLeft)) * 5 + Math.max(0, 300 - Math.floor(sec)) * 2;
   }
 
-  function showBossHud() {
+  function showBossHud(enemy) {
     const boss = document.getElementById('hud-boss');
     if (boss) boss.classList.remove('hidden');
     const fill = document.getElementById('hud-boss-fill');
     if (fill) fill.style.width = '100%';
     const bar = document.getElementById('hud-boss-bar');
     if (bar) bar.setAttribute('aria-valuenow', '100');
+    const num = document.getElementById('hud-boss-hp');
+    if (num && enemy) num.textContent = Math.ceil(enemy.hp) + ' / ' + enemy.maxHp;
   }
 
   function updateBossHud(enemy) {
@@ -650,6 +652,8 @@ function startDuel(ctx) {
     if (fill) fill.style.width = pct + '%';
     const bar = document.getElementById('hud-boss-bar');
     if (bar) bar.setAttribute('aria-valuenow', String(Math.round(pct)));
+    const num = document.getElementById('hud-boss-hp');
+    if (num) num.textContent = Math.max(0, Math.ceil(enemy.hp)) + ' / ' + enemy.maxHp;
   }
 
   function spawnMaestro() {
@@ -663,7 +667,7 @@ function startDuel(ctx) {
     enemies.push(enemy);
     window.__enemies = enemies;
     duel.spawned = true;
-    showBossHud();
+    showBossHud(enemy);
     sfx('waveStart');
     console.log('Duelo: el Maestro entra en la arena (HP ' + enemy.maxHp + ').');
   }

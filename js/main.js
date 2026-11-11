@@ -21,6 +21,7 @@ import { Enemies } from './enemies.js';
 import { Modes } from './modes.js';
 import { Quality } from './quality.js';
 import { VFX } from './vfx.js';
+import { HeroPreview } from './hero-preview.js';
 
 /* Comprobación defensiva de Audio (js/audio.js, binding léxico global). */
 function sfx(name) {
@@ -430,13 +431,19 @@ function clearHitBursts() {
 function syncHpHud() {
   if (!arena || !arena.player) return;
   const p = arena.player;
+  const curHp = Math.max(0, Math.ceil(p.hp));
   const pct = Math.max(0, Math.min(100, (p.hp / p.maxHp) * 100));
-  if (pct === lastHpShown) return;
-  lastHpShown = pct;
+  if (curHp === lastHpShown) return;
+  lastHpShown = curHp;
   const hudHp = document.getElementById('hud-hp');
-  if (hudHp) hudHp.setAttribute('aria-valuenow', String(Math.round(pct)));
+  if (hudHp) {
+    hudHp.setAttribute('aria-valuenow', String(Math.round(pct)));
+    hudHp.classList.toggle('low-hp', pct > 0 && pct <= 30);
+  }
   const fill = document.getElementById('hud-hp-fill');
   if (fill) fill.style.width = pct + '%';
+  const text = document.getElementById('hud-hp-text');
+  if (text) text.textContent = curHp + ' / ' + p.maxHp;
 }
 
 function spawnPlayer() {
@@ -563,7 +570,14 @@ function animateArena() {
 /** Cambia de pantalla sólo si ui.showScreen acepta el id; devuelve si tuvo éxito. */
 function go(screenId, nextState) {
   const ok = ui.showScreen(screenId);
-  if (ok) state = nextState;
+  if (ok) {
+    state = nextState;
+    if (screenId === 'hero') {
+      HeroPreview.mount(document.getElementById('hero-preview-viewport'), selectedHeroId);
+    } else {
+      HeroPreview.unmount();
+    }
+  }
   return ok;
 }
 
@@ -602,6 +616,7 @@ function bindUI() {
     if (!card) return;
     selectedHeroId = card.dataset.heroId;
     ui.selectHeroCard(selectedHeroId);
+    HeroPreview.setHero(selectedHeroId);
   });
   document.getElementById('btn-hero-continue').addEventListener('click', () => go('map', 'MAP'));
 
@@ -631,6 +646,33 @@ function bindUI() {
   if (qualitySelect) {
     qualitySelect.value = Quality.level;
     qualitySelect.addEventListener('change', () => Quality.set(qualitySelect.value));
+  }
+
+  // Botón global de silencio (master-gain en Audio)
+  const muteBtn = document.getElementById('btn-mute');
+  if (muteBtn) {
+    const syncMuteBtn = () => {
+      const muted = typeof Audio !== 'undefined' && Audio && typeof Audio.isMuted === 'function' ? Audio.isMuted() : false;
+      muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+      muteBtn.classList.toggle('muted', muted);
+      const label = muted ? 'Activar audio' : 'Silenciar audio';
+      muteBtn.title = label;
+      muteBtn.setAttribute('aria-label', label);
+      const icon = document.getElementById('mute-icon');
+      const text = document.getElementById('mute-label');
+      if (icon) icon.textContent = muted ? '静' : '音';
+      if (text) text.textContent = muted ? 'Silencio' : 'Sonido';
+    };
+    syncMuteBtn();
+    muteBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (typeof Audio !== 'undefined' && Audio && typeof Audio.setMuted === 'function') {
+        const next = !Audio.isMuted();
+        Audio.setMuted(next);
+        if (!next) sfx('uiClick');
+      }
+      syncMuteBtn();
+    });
   }
 
   // Fin de partida

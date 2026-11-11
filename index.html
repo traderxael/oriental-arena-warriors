@@ -119,7 +119,22 @@
     <!-- Pantalla: Selección de héroe -->
     <section id="screen-hero" class="screen" aria-label="Elige tu guerrero">
       <h2 class="screen-heading">Elige tu guerrero</h2>
-      <div id="hero-cards" class="card-row" role="listbox" aria-label="Héroes disponibles"></div>
+      <div class="hero-stage-layout">
+        <div id="hero-cards" class="card-row" role="listbox" aria-label="Héroes disponibles"></div>
+        <aside id="hero-preview-panel" class="hero-preview-panel" aria-label="Vista previa 3D del guerrero">
+          <div id="hero-preview-viewport" class="hero-preview-viewport"></div>
+          <div class="hero-preview-caption">
+            <strong id="hero-preview-name">Akane</strong>
+            <span id="hero-preview-epithet">La Ronin Exiliada</span>
+          </div>
+          <dl class="hero-preview-metrics" id="hero-preview-metrics">
+            <div><dt>Vida</dt><dd id="hpv-hp">100</dd></div>
+            <div><dt>Daño</dt><dd id="hpv-dmg">18</dd></div>
+            <div><dt>Alcance</dt><dd id="hpv-rng">2.6 m</dd></div>
+            <div><dt>Arma</dt><dd id="hpv-wpn">Katana</dd></div>
+          </dl>
+        </aside>
+      </div>
       <div class="screen-nav">
         <button class="btn btn-ghost" type="button" data-back="mode">&larr; Volver</button>
         <button class="btn btn-primary" id="btn-hero-continue" type="button">Continuar &rarr;</button>
@@ -185,6 +200,7 @@
 
     <!-- Pantalla: Fin de partida -->
     <section id="screen-gameover" class="screen" aria-label="Fin de la partida">
+      <div id="go-seal" class="gameover-seal" aria-hidden="true">敗</div>
       <h2 class="screen-heading">Has caído en la arena</h2>
       <p id="go-mode" class="gameover-mode">Hordas</p>
       <div id="go-record" class="record-badge hidden" role="status">¡NUEVO RÉCORD!</div>
@@ -207,13 +223,17 @@
     <div id="hud" class="screen" aria-label="Interfaz de juego">
       <canvas id="game-canvas" class="hidden" aria-hidden="true"></canvas>
       <div class="hud-top-left">
-        <div class="hud-label">HP</div>
+        <div class="hud-bar-head">
+          <span class="hud-label">HP</span>
+          <span class="hud-hp-num" id="hud-hp-text">100 / 100</span>
+        </div>
         <div class="hp-bar" id="hud-hp" role="progressbar" aria-label="Vida" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
           <div class="hp-fill" id="hud-hp-fill" style="width:100%"></div>
+          <div class="bar-ticks" aria-hidden="true"></div>
         </div>
         <div class="hud-label">Qi</div>
-        <div class="qi-bar" id="hud-qi" role="progressbar" aria-label="Qi / especial" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
-          <div class="qi-fill" id="hud-qi-fill" style="width:50%"></div>
+        <div class="qi-bar" id="hud-qi" role="progressbar" aria-label="Qi / especial" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+          <div class="qi-fill" id="hud-qi-fill" style="width:100%"></div>
         </div>
         <div class="hud-label">Especial</div>
         <div class="special-row" id="hud-special" role="status" aria-live="polite" aria-label="Especial">
@@ -230,9 +250,13 @@
       </div>
       <div id="hud-buffs" class="hud-buffs hidden" aria-label="Potenciadores activos"></div>
       <div id="hud-boss" class="hud-boss hidden">
-        <div class="boss-name">影武者 · Maestro</div>
+        <div class="boss-header">
+          <div class="boss-name">影武者 · Maestro</div>
+          <span class="boss-hp-num" id="hud-boss-hp">600 / 600</span>
+        </div>
         <div class="boss-bar" id="hud-boss-bar" role="progressbar" aria-label="Vida del Maestro" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
           <div class="boss-fill" id="hud-boss-fill" style="width:100%"></div>
+          <div class="bar-ticks" aria-hidden="true"></div>
         </div>
       </div>
       <div id="banner-wave" role="status" aria-live="assertive"></div>
@@ -240,6 +264,11 @@
       <div id="vignette-damage" aria-hidden="true"></div>
       <button class="btn btn-ghost hud-back" id="btn-hud-back" type="button">&larr; Volver</button>
     </div>
+
+    <button class="btn-mute" id="btn-mute" type="button" aria-pressed="false" title="Silenciar audio" aria-label="Silenciar audio">
+      <span class="mute-icon" id="mute-icon" aria-hidden="true">音</span>
+      <span class="mute-label" id="mute-label">Sonido</span>
+    </button>
 
   </main>
 

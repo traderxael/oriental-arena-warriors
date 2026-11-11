@@ -19,12 +19,20 @@
 
 const Audio = (() => {
   const MASTER_VOLUME = 0.5;
+  const MUTE_KEY = 'oaw_muted';
 
   let ctx = null;          // AudioContext (null hasta el primer gesto / init)
   let master = null;       // GainNode maestro → ctx.destination
   let noiseBuf = null;     // buffer de ruido blanco reutilizado
   let failed = false;      // true si AudioContext no está disponible: no reintentar en bucle
+  let muted = false;
   const played = Object.create(null); // contador por nombre (depuración)
+
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      muted = window.localStorage.getItem(MUTE_KEY) === '1';
+    }
+  } catch (_err) { /* incógnito */ }
 
   /* ---------- Contexto ---------- */
 
@@ -41,7 +49,7 @@ const Audio = (() => {
       if (!AC) { failed = true; return false; }
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = MASTER_VOLUME;
+      master.gain.value = muted ? 0 : MASTER_VOLUME;
       master.connect(ctx.destination);
       if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
         ctx.resume().catch(() => { /* silencioso: otro gesto reintentará */ });
@@ -201,13 +209,36 @@ const Audio = (() => {
     }
   }
 
+  /** Silencia o reactiva el bus maestro (GainNode) y persiste la preferencia. */
+  function setMuted(flag) {
+    muted = !!flag;
+    try {
+      if (master && ctx) {
+        master.gain.setValueAtTime(muted ? 0 : MASTER_VOLUME, ctx.currentTime);
+      } else if (master) {
+        master.gain.value = muted ? 0 : MASTER_VOLUME;
+      }
+    } catch (_err) { /* silencioso */ }
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
+      }
+    } catch (_err) { /* incógnito */ }
+    return muted;
+  }
+
+  function isMuted() {
+    return muted;
+  }
+
   /** Depuración/verificación headless: estado + nº de disparos por SFX. */
   function debug() {
     return {
       ready: !!(ctx && master),
       failed,
+      muted,
       state: ctx ? ctx.state : 'none',
-      masterVolume: MASTER_VOLUME,
+      masterVolume: muted ? 0 : MASTER_VOLUME,
       played: { ...played },
     };
   }
@@ -220,5 +251,5 @@ const Audio = (() => {
     window.addEventListener('keydown', onGesture, { once: true });
   }
 
-  return { init, play, MASTER_VOLUME, debug };
+  return { init, play, setMuted, isMuted, MASTER_VOLUME, debug };
 })();
