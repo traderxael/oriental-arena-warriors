@@ -122,9 +122,9 @@ function tryAttack(player, enemies, now) {
   player.comboStep = chained ? (player.comboStep % 3) + 1 : 1;
   player.comboExpiresAt = t + comboWindow;
 
-  const damage = window.Logic
+  const damage = Math.round((window.Logic
     ? window.Logic.comboDamage(stats.damage, player.comboStep)
-    : Math.round((stats.damage || 0) * [1, 1.15, 1.4][player.comboStep - 1]);
+    : Math.round((stats.damage || 0) * [1, 1.15, 1.4][player.comboStep - 1])) * (player.damageMult || 1));
 
   // Animación placeholder: tajo del pivote de arma (ver tickAttackAnim).
   player.swingStart = t;
@@ -182,7 +182,7 @@ function trySpecial(player, enemies, now) {
       hit = along >= 0 && along <= AKANE_LINE_RANGE && perp <= AKANE_LINE_HALF_WIDTH;
     }
     if (!hit) continue;
-    const damage = isGoro ? GORO_SPIN_DAMAGE : AKANE_LINE_DAMAGE;
+    const damage = Math.round((isGoro ? GORO_SPIN_DAMAGE : AKANE_LINE_DAMAGE) * (player.damageMult || 1));
     const { killed } = dealDamage(enemy, damage);
     if (isGoro && dist > 1e-4) {
       // Empujón radial desde el jugador, limitado al borde de la arena

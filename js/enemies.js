@@ -1,33 +1,35 @@
 /* ============================================================
-   enemies.js — Enemigos: ronin, bandido, lancero y brute + IA de persecución
+   enemies.js — Enemigos: ronin, bandido, lancero, brute y maestro + IA
 
    Interfaz pública (global de depuración `window.Enemies`):
      Enemies.spawn(type, wave, map, scene) -> Enemy
-       Crea un enemigo del `type` ('ronin' | 'bandido' | 'lancero' | 'brute')
-       con las stats
-       escaladas por oleada de Logic.enemyStats(type, wave) y lo añade
-       a `scene` en un spawnPoint aleatorio de `map` (mapa o cualquier
-       objeto con { spawnPoints: THREE.Vector3[], radius: number }).
+       Crea un enemigo del `type` ('ronin' | 'bandido' | 'lancero' |
+       'brute' | 'maestro') con las stats escaladas por oleada de
+       Logic.enemyStats(type, wave) — el maestro usa Logic.duelStats() —
+       y lo añade a `scene` en un spawnPoint aleatorio de `map` (mapa o
+       cualquier objeto con { spawnPoints: THREE.Vector3[], radius: number }).
        Tipos desconocidos: Logic.enemyStats lanza (por diseño).
-     Enemies.updateAll(list, dt, playerPos, now)
+     Enemies.updateAll(list, dt, playerPos, now, player)
        Actualiza una lista de enemigos in situ: persecución directa
        hacia `playerPos` (cualquier {x, z}), separación simple entre
-       enemigos (radio 0.9 m) y ataques con windup. Elimina de la
-       escena y de la lista a los que mueran (liberando sus recursos
-       procedurales propios).
+       enemigos (radio 0.9 m) y ataques con windup. `player` (opcional)
+       es el objeto jugador completo: el maestro lo usa para esquivar
+       reactivamente sus tajos. Elimina de la escena y de la lista a
+       los que mueran (liberando sus recursos procedurales propios).
      Enemies.onPlayerDamage(fn)
        Registra el manejador que recibe (damage, enemy) cuando el
        windup de un ataque enemigo se completa y el jugador sigue en
        rango. main.js lo usa para restar HP y flashear el vignette.
-     Enemies.SUPPORTS — tipos con builders implementados (['ronin','bandido','lancero','brute']).
+     Enemies.SUPPORTS — tipos con builders implementados
+       (['ronin','bandido','lancero','brute','maestro']).
 
    Enemy (interfaz compatible con Combat):
      { group, hp, maxHp, type, alive, attackCooldownUntil,
-       takeDamage(n), update(dt, playerPos, now) }
+       takeDamage(n), update(dt, playerPos, now, player) }
    (`alive` es requerido por Combat.aliveEnemies; sin él el enemigo
    seguiría recibiendo golpes tras morir.)
 
-   IA por frame:
+   IA por frame (tipos normales):
      - Si está en windup (originado al entrar en `range`), queda
        enraizado; al completarse los 0.4 s aplica el daño si el
        jugador sigue a ≤ range * 1.4 m.
@@ -36,13 +38,17 @@
        windup de 0.4 s (attackCooldownUntil = now + attackCooldown).
      - Separación: empuje mutuo para que dos enemigos no se solapen
        (distancia < 0.9 m → se reparten el solape).
+   IA del maestro (Duelo): orbita a range×0.9, alterna ciclos de
+   aproximación/retirada, dash de retirada reactivo al tajo del jugador
+   (0.22 s a 10 m/s, cooldown 2.5 s), windup de 0.5 s y giro especial
+   telegrafiado (0.7 s) cada 9 s con daño ×1.5 en radio range×1.8.
    El jugador es invulnerable durante los i-frames del dash: el
    manejador de daño (main.js) lo consulta con player.isInvulnerable().
 
    Visual: constructores procedurales distintos por tipo (recolores
-   y siluetas del patrón de heroes.js). El arma del ronin se sustituye
-   en caliente por assets/props/katana.glb (Assets.loadGLB, con
-   fallback procedural automático); el machete del bandido es
+   y siluetas del patrón de heroes.js). El arma del ronin y del maestro
+   se sustituye en caliente por assets/props/katana.glb (Assets.loadGLB,
+   con fallback procedural automático); el machete del bandido es
    procedural (no hay GLB commiteado: Assets.loadGLB caería al
    fallback igualmente, con su warning claro en consola).
 
@@ -56,7 +62,10 @@ const SEPARATION_RADIUS = 0.9;      // m — repulsión entre enemigos
 const WINDUP_TIME = 0.4;            // s de windup antes del golpe
 const WINDUP_RANGE_SLACK = 1.4;     // el golpe conecta hasta range * slack
 const ENEMY_RADIUS = 0.65;          // para el clamp circular en la arena
-const SUPPORTS = ['ronin', 'bandido', 'lancero', 'brute'];
+const SUPPORTS = ['ronin', 'bandido', 'lancero', 'brute', 'maestro'];
+const MAESTRO_WINDUP = 0.5;         // s de telegraph del golpe del maestro
+const MAESTRO_SPECIAL_WINDUP = 0.7; // s de telegraph del giro del maestro
+const MAESTRO_SPECIAL_CD = 9;       // s entre giros del maestro
 
 /* ---------- Materiales y helpers (patrón heroes.js) ---------- */
 
@@ -435,7 +444,67 @@ function buildBrute() {
   return g;
 }
 
-const BUILDERS = { ronin: buildRonin, bandido: buildBandido, lancero: buildLancero, brute: buildBrute };
+/** Maestro del Duelo: armadura de laca negra con filetes dorados y menpō. ~1.85 m. */
+function buildMaestro() {
+  const g = new THREE.Group();
+  g.name = 'enemy:maestro';
+
+  const C = { lacquer: '#181410', lacquerDark: '#0d0b09', gold: '#d4af37', goldDark: '#a8862a', skin: '#caa176', cloth: '#241d16' };
+
+  g.add(buildLegs(0.8, 0.1, C.lacquerDark, '#14100c'));
+
+  // Torso: dō de laca negra con obi dorado
+  const torsoY = 1.16;
+  const torso = mesh(new THREE.CylinderGeometry(0.24, 0.32, 0.66, 12), C.lacquer, { roughness: 0.35, metalness: 0.3 });
+  torso.position.y = torsoY;
+  const obi = mesh(new THREE.CylinderGeometry(0.30, 0.305, 0.1, 12), C.goldDark, { roughness: 0.4, metalness: 0.6 });
+  obi.position.y = 0.85;
+  const crest = mesh(new THREE.BoxGeometry(0.16, 0.16, 0.03), C.gold, { roughness: 0.35, metalness: 0.8 });
+  crest.position.set(0, torsoY + 0.1, 0.29);
+  g.add(torso, obi, crest);
+
+  // Sode de laca con borde dorado
+  [-1, 1].forEach((side) => {
+    const sode = mesh(new THREE.BoxGeometry(0.15, 0.26, 0.3), C.lacquer, { roughness: 0.35, metalness: 0.3 });
+    sode.position.set(side * 0.33, 1.38, 0);
+    sode.rotation.z = side * 0.16;
+    const trim = mesh(new THREE.BoxGeometry(0.16, 0.04, 0.31), C.gold, { roughness: 0.35, metalness: 0.8 });
+    trim.position.set(side * 0.33, 1.5, 0);
+    trim.rotation.z = side * 0.16;
+    g.add(sode, trim);
+  });
+
+  // Brazos
+  [-1, 1].forEach((side) => {
+    const sleeve = mesh(new THREE.CylinderGeometry(0.07, 0.078, 0.34, 8), C.cloth, { roughness: 0.75 });
+    sleeve.position.set(side * 0.30, 1.2, 0);
+    sleeve.rotation.z = side * 0.24;
+    const fore = mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.3, 8), C.lacquerDark);
+    fore.position.set(side * 0.38, 0.94, 0.05);
+    fore.rotation.z = side * 0.12;
+    g.add(sleeve, fore);
+  });
+
+  // Cabeza + menpō (media máscara) y kabuto con maedate dorado
+  const head = mesh(new THREE.SphereGeometry(0.16, 12, 10), C.skin, { roughness: 0.7 });
+  head.position.y = 1.56;
+  const mask = mesh(new THREE.SphereGeometry(0.165, 12, 8, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5), C.lacquerDark, { roughness: 0.4, metalness: 0.3 });
+  mask.position.y = 1.56;
+  const helm = mesh(new THREE.SphereGeometry(0.19, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), C.lacquer, { roughness: 0.3, metalness: 0.4 });
+  helm.position.y = 1.6;
+  const maedate = mesh(new THREE.BoxGeometry(0.05, 0.24, 0.03), C.gold, { roughness: 0.3, metalness: 0.85 });
+  maedate.position.y = 1.82;
+  g.add(head, mask, helm, maedate);
+
+  const weapon = createWeaponPivot('katana', 0.4, 1.0, 0.07, -0.58);
+  g.add(weapon);
+
+  shadowed(g);
+  attachRoninWeaponGLB(g);
+  return g;
+}
+
+const BUILDERS = { ronin: buildRonin, bandido: buildBandido, lancero: buildLancero, brute: buildBrute, maestro: buildMaestro };
 
 /* ---------- Daño al jugador ---------- */
 
@@ -454,9 +523,13 @@ function spawn(type, wave, map, scene) {
     throw new Error('Enemies.spawn: tipo no soportado "' + String(type) +
       '" (soportados: ' + SUPPORTS.join(', ') + ')');
   }
-  const stats = window.Logic
-    ? window.Logic.enemyStats(type, wave)
-    : { hp: 60, speed: 2.2, damage: 8, range: 1.6, attackCooldown: 1.2 };
+  const stats = type === 'maestro'
+    ? (window.Logic && typeof window.Logic.duelStats === 'function'
+      ? window.Logic.duelStats()
+      : { hp: 600, speed: 3.4, damage: 16, range: 2.8, attackCooldown: 1.1 })
+    : (window.Logic
+      ? window.Logic.enemyStats(type, wave)
+      : { hp: 60, speed: 2.2, damage: 8, range: 1.6, attackCooldown: 1.2 });
 
   const group = builder();
 
@@ -474,6 +547,7 @@ function spawn(type, wave, map, scene) {
   if (scene) scene.add(group);
 
   const arenaRadius = map && typeof map.radius === 'number' ? map.radius : 38;
+  const obstacles = map && Array.isArray(map.obstacles) ? map.obstacles : null;
   const maxHp = Math.max(1, Math.round(stats.hp));
 
   const enemy = {
@@ -487,10 +561,25 @@ function spawn(type, wave, map, scene) {
     windupUntil: 0,      // 0 = sin windup en curso
     pendingDamage: 0,
     weaponBaseZ: null,   // rotación Z base del pivote de arma (se captura 1ª vez)
-    update(dt, playerPos, now) {
+    // Estado exclusivo del maestro (Duelo)
+    duelMode: 'orbit',
+    duelModeUntil: 0,
+    orbitSign: 1,
+    dashUntil: 0,
+    dashX: 0,
+    dashZ: 0,
+    retreatCooldownUntil: 0,
+    spinUntil: 0,
+    pendingSpecial: false,
+    specialAt: 6,
+    update(dt, playerPos, now, player) {
       if (!this.alive) return;
       if (!(dt > 0)) return;
       const t = Number(now) || 0;
+      if (type === 'maestro') {
+        maestroUpdate(this, dt, playerPos, t, player, stats, arenaRadius, obstacles);
+        return;
+      }
       const px = playerPos && typeof playerPos.x === 'number' ? playerPos.x : 0;
       const pz = playerPos && typeof playerPos.z === 'number' ? playerPos.z : 0;
       const dx = px - group.position.x;
@@ -521,7 +610,7 @@ function spawn(type, wave, map, scene) {
         const step = Math.min(stats.speed * dt, dist);
         group.position.x += (dx / dist) * step;
         group.position.z += (dz / dist) * step;
-        clampToArena(group.position, arenaRadius);
+        clampToArena(group.position, arenaRadius, obstacles);
         return;
       }
 
@@ -548,6 +637,137 @@ function spawn(type, wave, map, scene) {
   return enemy;
 }
 
+/**
+ * IA del maestro (Duelo): orbita a media distancia, alterna ciclos de
+ * aproximación/retirada, esquiva con un dash reactivo cuando el jugador
+ * inicia un tajo cerca y telegrafía un giro especial cada MAESTRO_SPECIAL_CD s.
+ */
+function maestroUpdate(enemy, dt, playerPos, t, player, stats, arenaRadius, obstacles) {
+  const pos = enemy.group.position;
+  const px = playerPos && typeof playerPos.x === 'number' ? playerPos.x : 0;
+  const pz = playerPos && typeof playerPos.z === 'number' ? playerPos.z : 0;
+  const dx = px - pos.x;
+  const dz = pz - pos.z;
+  const dist = Math.hypot(dx, dz);
+  const range = stats.range;
+
+  // Fin del giro especial: el golpe conecta si el jugador sigue cerca
+  if (enemy.spinUntil > 0 && t >= enemy.spinUntil) {
+    enemy.spinUntil = 0;
+    setWindupPose(enemy, 0);
+    if (dist <= range * 1.8 && playerDamageHandler) {
+      playerDamageHandler(Math.round(stats.damage * 1.5), enemy);
+    }
+  }
+
+  // Giro en curso: rota sobre sí mismo, sin desplazarse
+  if (enemy.spinUntil > t) {
+    enemy.group.rotation.y += dt * 12;
+    return;
+  }
+
+  // Mirar siempre al jugador
+  if (dist > 1e-4) enemy.group.rotation.y = Math.atan2(dx, dz);
+
+  // Windup en curso: golpe normal (0.5 s) o giro especial (0.7 s)
+  if (enemy.windupUntil > 0) {
+    const duration = enemy.pendingSpecial ? MAESTRO_SPECIAL_WINDUP : MAESTRO_WINDUP;
+    const p = THREE.MathUtils.clamp((t - (enemy.windupUntil - duration)) / duration, 0, 1);
+    setWindupPose(enemy, p);
+    if (t >= enemy.windupUntil) {
+      enemy.windupUntil = 0;
+      if (enemy.pendingSpecial) {
+        enemy.pendingSpecial = false;
+        enemy.spinUntil = t + 0.45;
+      } else {
+        const dmg = enemy.pendingDamage;
+        enemy.pendingDamage = 0;
+        setWindupPose(enemy, 0);
+        if (dist <= range * WINDUP_RANGE_SLACK && playerDamageHandler) {
+          playerDamageHandler(dmg, enemy);
+        }
+      }
+    }
+    return;
+  }
+
+  // Dash de retirada reactivo al inicio de un tajo del jugador
+  if (player && player.alive && typeof player.swingStart === 'number' &&
+      player.swingStart > 0 && t >= player.swingStart && t - player.swingStart <= 0.12 &&
+      dist < range * 1.6 && t >= enemy.retreatCooldownUntil) {
+    enemy.retreatCooldownUntil = t + 2.5;
+    enemy.dashUntil = t + 0.22;
+    if (dist > 1e-4) {
+      enemy.dashX = -dx / dist;
+      enemy.dashZ = -dz / dist;
+    } else {
+      const a = Math.random() * Math.PI * 2;
+      enemy.dashX = Math.cos(a);
+      enemy.dashZ = Math.sin(a);
+    }
+  }
+  if (enemy.dashUntil > t) {
+    pos.x += enemy.dashX * 10 * dt;
+    pos.z += enemy.dashZ * 10 * dt;
+    clampToArena(pos, arenaRadius, obstacles);
+    return;
+  }
+
+  // Especial telegrafiado cada 9 s si el jugador está a distancia razonable
+  if (t >= enemy.specialAt && dist <= range * 2.2) {
+    enemy.specialAt = t + MAESTRO_SPECIAL_CD;
+    enemy.windupUntil = t + MAESTRO_SPECIAL_WINDUP;
+    enemy.pendingSpecial = true;
+    enemy.attackCooldownUntil = Math.max(enemy.attackCooldownUntil, t + MAESTRO_SPECIAL_WINDUP + 0.6);
+    setWindupPose(enemy, 0);
+    return;
+  }
+
+  // Golpe normal telegrafiado en rango y con el ataque listo
+  if (dist <= range && t >= enemy.attackCooldownUntil) {
+    enemy.windupUntil = t + MAESTRO_WINDUP;
+    enemy.pendingDamage = stats.damage;
+    enemy.attackCooldownUntil = t + stats.attackCooldown;
+    setWindupPose(enemy, 0);
+    return;
+  }
+
+  // Ciclos de combate: orbitar → aproximarse → retirarse
+  if (t >= enemy.duelModeUntil) {
+    const modes = ['orbit', 'approach', 'retreat'];
+    enemy.duelMode = modes[Math.floor(Math.random() * modes.length)];
+    enemy.duelModeUntil = t + 1.2 + Math.random() * 1.4;
+    if (Math.random() < 0.5) enemy.orbitSign *= -1;
+  }
+
+  const nx = dist > 1e-4 ? dx / dist : 0;
+  const nz = dist > 1e-4 ? dz / dist : 0;
+  let mx = 0;
+  let mz = 0;
+  if (enemy.duelMode === 'approach') {
+    if (dist > range * 0.75) { mx = nx; mz = nz; }
+  } else if (enemy.duelMode === 'retreat') {
+    if (dist < range * 1.5) { mx = -nx; mz = -nz; }
+  } else {
+    // Orbit: mantiene range×0.9 con componente radial correctiva + lateral
+    const target = range * 0.9;
+    const radial = dist > target ? 0.6 : (dist < target * 0.7 ? -0.6 : 0);
+    mx = nx * radial - nz * enemy.orbitSign;
+    mz = nz * radial + nx * enemy.orbitSign;
+  }
+  const len = Math.hypot(mx, mz);
+  if (len > 1e-4) {
+    mx /= len;
+    mz /= len;
+    let step = stats.speed * dt;
+    if (enemy.duelMode === 'approach') step = Math.min(step, Math.max(0, dist - range * 0.75));
+    else if (enemy.duelMode === 'retreat') step = Math.min(step, Math.max(0, range * 1.5 - dist));
+    pos.x += mx * step;
+    pos.z += mz * step;
+    clampToArena(pos, arenaRadius, obstacles);
+  }
+}
+
 /** Telegraph del windup: el arma se echa atrás y el torso se inclina. p ∈ [0, 1]. */
 function setWindupPose(enemy, p) {
   const weapon = enemy.group.getObjectByName('weapon');
@@ -558,14 +778,27 @@ function setWindupPose(enemy, p) {
   enemy.group.rotation.x = -0.14 * Math.sin(p * Math.PI);
 }
 
-/** Devuelve la posición con su radio en XZ limitado a la arena. */
-function clampToArena(pos, radius) {
+/** Limita la posición al círculo de la arena y la saca de los obstáculos circulares. */
+function clampToArena(pos, radius, obstacles) {
   const max = Math.max((radius || 38) - ENEMY_RADIUS, 1);
   const r = Math.hypot(pos.x, pos.z);
   if (r > max) {
     const s = max / r;
     pos.x *= s;
     pos.z *= s;
+  }
+  if (obstacles) {
+    for (const ob of obstacles) {
+      const dx = pos.x - ob.x;
+      const dz = pos.z - ob.z;
+      const d = Math.hypot(dx, dz);
+      const min = (Number(ob.r) || 0) + ENEMY_RADIUS;
+      if (d < min && d > 1e-6) {
+        const s = min / d;
+        pos.x = ob.x + dx * s;
+        pos.z = ob.z + dz * s;
+      }
+    }
   }
   return pos;
 }
@@ -591,13 +824,13 @@ function disposeEnemy(enemy) {
  * Actualiza todos los enemigos. Elimina de la escena y de `list` a los
  * que hayan muerto (hp <= 0), liberando sus recursos propios.
  */
-function updateAll(list, dt, playerPos, now) {
+function updateAll(list, dt, playerPos, now, player) {
   if (!Array.isArray(list)) return;
   const t = Number(now) || 0;
 
   // 1) IA individual
   for (const enemy of list) {
-    if (enemy && typeof enemy.update === 'function') enemy.update(dt, playerPos, t);
+    if (enemy && typeof enemy.update === 'function') enemy.update(dt, playerPos, t, player);
   }
 
   // 2) Separación: repulsión mútua (reparto del solape)

@@ -40,7 +40,10 @@ body {
   inset: 0;
   flex-direction: column;
   align-items: center;
+  /* safe center: si el contenido no cabe (viewport bajo), alinea al inicio
+     para que el encabezado siga siendo alcanzable con scroll. */
   justify-content: center;
+  justify-content: safe center;
   gap: 1.4rem;
   padding: 2rem 1.5rem;
   overflow-y: auto;
@@ -426,6 +429,17 @@ body {
 }
 .gameover-row:last-child { border-bottom: none; padding-bottom: 0; }
 .gameover-row strong { color: var(--dorado); font-size: 1.25rem; }
+.gameover-mode {
+  margin-top: -0.8rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--papel-oscuro);
+}
+.screen-heading.victory {
+  color: #ffd75e;
+  text-shadow: 0 2px 0 var(--tinta), 0 0 24px rgba(255, 215, 94, 0.55), 0 6px 18px var(--sombra);
+}
 
 /* ============ HUD ============ */
 #hud { justify-content: stretch; align-items: stretch; pointer-events: none; }
@@ -524,6 +538,92 @@ body {
   color: var(--papel-oscuro);
 }
 .hud-stat span { color: var(--dorado); font-weight: 700; font-size: 1.05rem; margin-left: 0.4rem; }
+.hud-mode {
+  background: rgba(160, 52, 44, 0.75);
+  border: 1px solid rgba(212, 175, 55, 0.6);
+  border-radius: 4px;
+  padding: 0.25rem 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--papel);
+}
+
+/* Barra de vida del boss (Duelo), centrada arriba */
+.hud-boss {
+  position: absolute;
+  top: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 60vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: center;
+}
+.boss-name {
+  align-self: center;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--dorado);
+  text-shadow: 0 2px 6px var(--sombra);
+}
+.boss-bar {
+  height: 14px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(212, 175, 55, 0.65);
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px var(--sombra);
+}
+.boss-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5c1f1a, var(--rojo) 55%, var(--dorado));
+  transition: width 0.2s ease;
+}
+/* Viewport estrecho: la barra centrada arriba chocaría con los paneles
+   laterales; abajo al centro queda libre (VOLVER vive abajo-izquierda). */
+@media (max-width: 900px) {
+  .hud-boss { top: auto; bottom: 4.6rem; }
+}
+
+/* Potenciadores activos (Supervivencia), bajo el panel izquierdo */
+.hud-buffs {
+  position: absolute;
+  top: 11.5rem;
+  left: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  text-align: left;
+}
+.buff {
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-left-width: 3px;
+  border-radius: 4px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--papel);
+  font-variant-numeric: tabular-nums;
+}
+.buff-damage { border-left-color: #ff5040; color: #ffb0a6; }
+.buff-speed { border-left-color: #3cc8e8; color: #b8ecf8; }
+
+/* Destello verde al recoger un orbe de curación */
+.hp-bar.heal-flash { animation: heal-pulse 0.7s ease; }
+@keyframes heal-pulse {
+  0%   { box-shadow: 0 0 0 rgba(120, 220, 130, 0); }
+  30%  { box-shadow: 0 0 18px rgba(120, 220, 130, 0.9); border-color: #78dc82; }
+  100% { box-shadow: 0 2px 8px var(--sombra); }
+}
 
 .hud-placeholder {
   position: absolute;

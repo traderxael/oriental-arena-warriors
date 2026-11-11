@@ -5,6 +5,7 @@
                            (id 'hud' controla #hud). Ids válidos:
                            'title' | 'mode' | 'hero' | 'map' | 'pause' | 'gameover' | 'hud'
      ui.setHeroCards(heroes) — pinta las tarjetas de selección de héroe
+     ui.setHudMode(id)       — adapta el HUD al modo (hordas/supervivencia/duelo)
      ui.showGameOver(stats)  — rellena #screen-gameover y lo muestra
      ui.showBanner(texto)    — destello central (#banner-wave)
    ============================================================ */
@@ -151,20 +152,57 @@ const ui = (() => {
     return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
   }
 
-  /** Rellena y muestra la pantalla de fin de partida. */
+  const MODE_LABELS = { hordas: 'Hordas', supervivencia: 'Supervivencia', duelo: 'Duelo' };
+  const BEST_LABELS = {
+    hordas: 'Mejor puntuación · Hordas',
+    supervivencia: 'Mejor puntuación · Supervivencia',
+    duelo: 'Mejor puntuación · Duelo',
+  };
+
+  /** Muestra u oculta un elemento por id (clase .hidden). */
+  function setHidden(id, hidden) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', !!hidden);
+  }
+
+  /** Adapta el HUD al modo elegido: etiqueta, fila de oleada, buffs y barra de boss. */
+  function setHudMode(id) {
+    const mode = MODE_LABELS[id] ? id : 'hordas';
+    const label = document.getElementById('hud-mode');
+    if (label) label.textContent = MODE_LABELS[mode];
+    setHidden('hud-wave-stat', mode === 'duelo');
+    setHidden('hud-buffs', mode !== 'supervivencia');
+    setHidden('hud-boss', mode !== 'duelo');
+  }
+
+  /** Rellena y muestra la pantalla de fin de partida (derrota o victoria, por modo). */
   function showGameOver(stats) {
     const s = stats || {};
+    const mode = MODE_LABELS[s.mode] ? s.mode : 'hordas';
     const set = (id, value) => {
       const el = document.getElementById(id);
       if (el) el.textContent = String(value == null ? 0 : value);
     };
+    const heading = document.querySelector('#screen-gameover .screen-heading');
+    if (heading) {
+      heading.textContent = s.won ? '¡Victoria!' : 'Has caído en la arena';
+      heading.classList.toggle('victory', !!s.won);
+    }
+    set('go-mode', MODE_LABELS[mode]);
     set('go-wave', s.wave);
     set('go-kills', s.kills);
     set('go-time', formatTime(s.time));
     set('go-score', s.score);
+    // Filas por modo: oleada (hordas/supervivencia), orbes (supervivencia), HP (duelo)
+    setHidden('go-wave-row', mode === 'duelo');
+    setHidden('go-pickups-row', mode !== 'supervivencia');
+    setHidden('go-hp-row', mode !== 'duelo');
+    set('go-pickups', s.pickups);
+    set('go-hp', s.hpLeft);
     // Mejor: '—' si no hay récord guardado todavía
     const bestEl = document.getElementById('go-best');
     if (bestEl) bestEl.textContent = s.hasBest ? String(s.best) : '—';
+    set('go-best-label', BEST_LABELS[mode]);
     const record = document.getElementById('go-record');
     if (record) record.classList.toggle('hidden', !s.isRecord);
     showScreen('gameover');
@@ -201,7 +239,15 @@ const ui = (() => {
     if (wave) wave.textContent = '1';
     if (score) score.textContent = '0';
     if (timer) timer.textContent = '00:00';
+    setHidden('hud-boss', true);
+    setHidden('hud-buffs', true);
+    const bossFill = document.getElementById('hud-boss-fill');
+    if (bossFill) bossFill.style.width = '100%';
+    const bossBar = document.getElementById('hud-boss-bar');
+    if (bossBar) bossBar.setAttribute('aria-valuenow', '100');
+    const hpBarEl = document.getElementById('hud-hp');
+    if (hpBarEl) hpBarEl.classList.remove('heal-flash');
   }
 
-  return { showScreen, setHeroCards, selectHeroCard, showGameOver, showBanner, resetHud };
+  return { showScreen, setHeroCards, selectHeroCard, setHudMode, showGameOver, showBanner, resetHud };
 })();

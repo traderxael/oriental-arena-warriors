@@ -170,6 +170,18 @@ const Audio = (() => {
       tone({ type: 'sawtooth', from: 240, to: 105, dur: 0.16, peak: 0.38 });
       noise({ dur: 0.09, peak: 0.2, from: 1050, to: 420, Q: 1.0 });
     },
+    // Orbe de poder recogido: campanilla ascendente brillante
+    pickup() {
+      tone({ type: 'sine', from: 660, to: 990, dur: 0.12, peak: 0.3 });
+      tone({ type: 'sine', from: 990, to: 1320, dur: 0.18, peak: 0.22, when: 0.08 });
+    },
+    // Victoria (Duelo): frase ascendente mayor (sol–si–re–sol)
+    victory() {
+      const notes = [392.0, 493.88, 587.33, 783.99];
+      notes.forEach((freq, i) => {
+        tone({ type: 'triangle', from: freq, to: freq, dur: 0.3, peak: 0.34, when: i * 0.16 });
+      });
+    },
   };
 
   /** Reproduce un SFX por nombre. Nunca lanza: silencio total si está bloqueado. */

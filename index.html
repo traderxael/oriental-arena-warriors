@@ -100,21 +100,15 @@
           <span class="card-title">Hordas</span>
           <span class="card-desc">Sobrevive oleadas infinitas de enemigos. ¿Cuánto aguantarás?</span>
         </button>
-        <button class="card mode-card disabled" type="button" disabled
-                title="Disponible en la próxima versión" data-tooltip="Disponible en la próxima versión"
-                aria-disabled="true">
+        <button class="card mode-card" type="button" data-mode="supervivencia">
           <span class="card-kanji" aria-hidden="true">生</span>
           <span class="card-title">Supervivencia</span>
-          <span class="card-desc">Enfócate en resistir el mayor tiempo posible.</span>
-          <span class="badge-soon">PRÓXIMAMENTE</span>
+          <span class="card-desc">Oleadas que nunca cesan y orbes de poder. Resiste todo lo que puedas.</span>
         </button>
-        <button class="card mode-card disabled" type="button" disabled
-                title="Disponible en la próxima versión" data-tooltip="Disponible en la próxima versión"
-                aria-disabled="true">
+        <button class="card mode-card" type="button" data-mode="duelo">
           <span class="card-kanji" aria-hidden="true">闘</span>
           <span class="card-title">Duelo</span>
-          <span class="card-desc">Enfréntate a un único maestro en combate 1 contra 1.</span>
-          <span class="badge-soon">PRÓXIMAMENTE</span>
+          <span class="card-desc">Enfréntate al Maestro en combate 1 contra 1. Gana quien vacíe la vida del otro.</span>
         </button>
       </div>
       <div class="screen-nav">
@@ -192,13 +186,16 @@
     <!-- Pantalla: Fin de partida -->
     <section id="screen-gameover" class="screen" aria-label="Fin de la partida">
       <h2 class="screen-heading">Has caído en la arena</h2>
+      <p id="go-mode" class="gameover-mode">Hordas</p>
       <div id="go-record" class="record-badge hidden" role="status">¡NUEVO RÉCORD!</div>
       <div class="gameover-stats" aria-live="polite">
-        <div class="gameover-row"><span>Oleada alcanzada</span><strong id="go-wave">1</strong></div>
+        <div class="gameover-row" id="go-wave-row"><span>Oleada alcanzada</span><strong id="go-wave">1</strong></div>
         <div class="gameover-row"><span>Enemigos derrotados</span><strong id="go-kills">0</strong></div>
+        <div class="gameover-row hidden" id="go-pickups-row"><span>Orbes recogidos</span><strong id="go-pickups">0</strong></div>
+        <div class="gameover-row hidden" id="go-hp-row"><span>Vida restante</span><strong id="go-hp">0</strong></div>
         <div class="gameover-row"><span>Tiempo</span><strong id="go-time">00:00</strong></div>
         <div class="gameover-row"><span>Puntuación</span><strong id="go-score">0</strong></div>
-        <div class="gameover-row"><span>Mejor puntuación</span><strong id="go-best">0</strong></div>
+        <div class="gameover-row"><span id="go-best-label">Mejor puntuación</span><strong id="go-best">0</strong></div>
       </div>
       <div class="menu-buttons">
         <button class="btn btn-primary" id="btn-retry" type="button">Reintentar</button>
@@ -226,9 +223,17 @@
         </div>
       </div>
       <div class="hud-top-right">
-        <div class="hud-stat">Oleada <span id="hud-wave">1</span></div>
+        <div class="hud-mode" id="hud-mode">Hordas</div>
+        <div class="hud-stat" id="hud-wave-stat">Oleada <span id="hud-wave">1</span></div>
         <div class="hud-stat">Puntos <span id="hud-score">0</span></div>
         <div class="hud-stat">Tiempo <span id="hud-timer">00:00</span></div>
+      </div>
+      <div id="hud-buffs" class="hud-buffs hidden" aria-label="Potenciadores activos"></div>
+      <div id="hud-boss" class="hud-boss hidden">
+        <div class="boss-name">影武者 · Maestro</div>
+        <div class="boss-bar" id="hud-boss-bar" role="progressbar" aria-label="Vida del Maestro" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+          <div class="boss-fill" id="hud-boss-fill" style="width:100%"></div>
+        </div>
       </div>
       <div id="banner-wave" role="status" aria-live="assertive"></div>
       <div class="hud-placeholder">Preparando la arena&hellip;</div>

@@ -41,15 +41,17 @@ window.__threeOk = true;
 var state = 'TITLE';
 
 let selectedHeroId = HEROES[0].id;
+// Modo elegido en la pantalla de modos ('hordas' | 'supervivencia' | 'duelo').
+let selectedMode = 'hordas';
 
 // Reloj de juego (segundos), actualizado cada frame en animateArena.
 // Los handlers de ratón/teclado lo usan para `now` (combos, cooldowns).
 let playTime = 0;
 // Enemigos vivos (los crea js/enemies.js). Array estable: se muta in situ.
 const enemies = [];
-// Controlador del modo Hordas (js/modes.js): única máquina de oleadas.
-// null cuando no hay partida de hordas activa (p. ej. ?debug=dummies).
-let horde = null;
+// Controlador del modo activo (js/modes.js): startHorde/startSurvival/startDuel.
+// null cuando no hay partida activa (p. ej. ?debug=dummies).
+let mode = null;
 // Ráfagas de partículas activas (evento combat:hit)
 const hitBursts = [];
 
@@ -231,7 +233,8 @@ function stopArena() {
     cancelAnimationFrame(arena.rafId);
     arena.rafId = null;
   }
-  horde = null;
+  if (mode && typeof mode.dispose === 'function') mode.dispose();
+  mode = null;
   removeEnemies();
   Combat.clearFloaters();
   clearHitBursts();
@@ -336,8 +339,8 @@ function damagePlayer(damage) {
   if (p.hp <= 0) {
     p.alive = false;
     if (state === 'PLAY') {
-      // Fin de partida: el modo muestra el game over y congela las oleadas
-      const stats = horde ? horde.gameOver() : null;
+      // Fin de partida: el modo muestra el game over y congela la partida
+      const stats = mode ? mode.gameOver() : null;
       state = 'GAMEOVER';
       if (!stats) {
         // Modo no disponible (p. ej. ?debug=dummies): pantalla básica de fin
@@ -450,15 +453,24 @@ function spawnPlayer() {
   // Cámara detrás del jugador desde el primer frame
   updateCamera(0, arena.camera, arena.player, arena, true);
   if (DEBUG_DUMMIES) {
-    horde = null; // los dummies son un objetivo de pruebas: sin modo hordas
+    mode = null; // los dummies son un objetivo de pruebas: sin modo activo
     spawnDebugDummies();
   } else {
-    // Hordas: la partida arranca con la oleada 1 (la gestiona Modes.startHorde)
-    horde = Modes.startHorde({
+    // El modo arranca la partida (Hordas: oleada 1; Supervivencia: timer +
+    // orbes; Duelo: el maestro). onEnd lo usa Duelo al ganar para congelar.
+    const ctx = {
       getArena: () => arena,
       getPlayer: () => (arena && arena.player) || null,
       enemies,
-    });
+      onEnd: () => {
+        if (state !== 'PLAY') return;
+        state = 'GAMEOVER';
+        stopArena();
+      },
+    };
+    if (selectedMode === 'supervivencia') mode = Modes.startSurvival(ctx);
+    else if (selectedMode === 'duelo') mode = Modes.startDuel(ctx);
+    else mode = Modes.startHorde(ctx);
   }
   const s = arena.player.hero.stats;
   console.log('Héroe listo: ' + arena.player.hero.name + ' — HP ' + arena.player.hp +
@@ -516,9 +528,9 @@ function animateArena() {
 
     // Enemigos: IA, separación, limpieza de muertos + spawn escalonado
     if (arena.player) {
-      Enemies.updateAll(enemies, dt, arena.player.group.position, t);
+      Enemies.updateAll(enemies, dt, arena.player.group.position, t, arena.player);
     }
-    if (horde) horde.update(dt);
+    if (mode) mode.update(dt);
 
     // Llamas: escala y parpadeo del PointLight
     for (const flame of arena.flames) {
@@ -552,6 +564,7 @@ function go(screenId, nextState) {
 
 function startGame() {
   ui.resetHud();
+  ui.setHudMode(selectedMode);
   go('hud', 'PLAY');
   startArena();
   spawnPlayer();
@@ -569,9 +582,12 @@ function bindUI() {
   // Título → Modo
   document.getElementById('btn-play').addEventListener('click', () => go('mode', 'MODE'));
 
-  // Modo → Héroe (sólo el modo habilitado; los deshabilitados llevan disabled + tooltip)
+  // Modo → Héroe (guarda el modo elegido; los deshabilitados llevan disabled + tooltip)
   document.querySelectorAll('#screen-mode .mode-card:not(.disabled)').forEach((btn) => {
-    btn.addEventListener('click', () => go('hero', 'HERO'));
+    btn.addEventListener('click', () => {
+      selectedMode = btn.dataset.mode || 'hordas';
+      go('hero', 'HERO');
+    });
   });
 
   // Héroe: selección de tarjeta
@@ -619,10 +635,10 @@ function bindUI() {
   // Error fatal → reintentar (recargar)
   document.getElementById('btn-error-retry').addEventListener('click', () => window.location.reload());
 
-  // combat:hit → partículas + damage floater (Task 5) + conteo de kills (Hordas)
+  // combat:hit → partículas + damage floater (Task 5) + conteo de kills (modo activo)
   window.addEventListener('combat:hit', (event) => {
     const d = event.detail || {};
-    if (d.killed && horde) horde.registerKill();
+    if (d.killed && mode) mode.registerKill();
     const x = Number(d.x) || 0;
     const y = Number(d.y) || 1.4;
     const z = Number(d.z) || 0;
@@ -696,7 +712,7 @@ function init() {
   window.__enemies = enemies;
   // Los ataques enemigos (windup completado) restan HP al jugador con flash rojo
   Enemies.onPlayerDamage((damage) => damagePlayer(damage));
-  Object.defineProperty(window, '__hordeState', { get: () => (horde ? horde.state() : null) }); // depuración
+  Object.defineProperty(window, '__modeState', { get: () => (mode ? mode.state() : null) }); // depuración
   bindUI();
   go('title', 'TITLE');
 

@@ -105,6 +105,9 @@ function createPlayer(heroId, scene, map) {
     swingStart: null,
     swingDuration: 0.3,
     swingStep: 0,
+    // Buffs temporales (orbes de Supervivencia); 1 = sin buff
+    damageMult: 1,
+    speedMult: 1,
     // estado interno
     time: 0,
     dashTime: 0,
@@ -158,7 +161,7 @@ function createPlayer(heroId, scene, map) {
         this.dashTime = Math.max(0, this.dashTime - dt);
         group.position.addScaledVector(this.dashDir, DASH_SPEED * dt);
       } else if (moving) {
-        group.position.addScaledVector(move, hero.stats.speed * dt);
+        group.position.addScaledVector(move, hero.stats.speed * (this.speedMult || 1) * dt);
       }
       clampToArena(group.position, arenaRadius, obstacles);
 
