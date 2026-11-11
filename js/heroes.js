@@ -69,6 +69,7 @@ function attachWeaponGLB(group, weaponLength) {
       const centered = new THREE.Box3().setFromObject(glb);
       const c = centered.getCenter(new THREE.Vector3());
       glb.position.set(-c.x, -c.y, -c.z);
+      Assets.disposeObject(holder);
       holder.clear();
       holder.add(glb);
     } catch (err) {

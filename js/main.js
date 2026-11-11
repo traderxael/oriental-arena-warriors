@@ -163,6 +163,7 @@ function startArena() {
   if (placeholder) placeholder.classList.add('hidden');
 
   arenaClock = new THREE.Clock();
+  playTime = 0;
   if (arena.rafId) cancelAnimationFrame(arena.rafId);
   animateArena();
 }
@@ -281,9 +282,11 @@ function damagePlayer(damage) {
       if (!stats) {
         // Modo no disponible (p. ej. ?debug=dummies): pantalla básica de fin
         sfx('gameOver');
-        stopArena();
         ui.showScreen('gameover');
       }
+      // Congelar y desmontar la arena: la pantalla de game over es opaca y
+      // no hay motivo para seguir renderizando detrás de ella.
+      stopArena();
       console.log('El jugador ha caído en la arena (oleada ' + (stats ? stats.wave : '?') + ').');
     }
   }
@@ -369,11 +372,7 @@ function syncHpHud() {
   const hudHp = document.getElementById('hud-hp');
   if (hudHp) hudHp.setAttribute('aria-valuenow', String(Math.round(pct)));
   const fill = document.getElementById('hud-hp-fill');
-  if (fill) {
-    fill.style.width = pct + '%';
-    const bar = fill.closest('.hp-bar');
-    if (bar) bar.setAttribute('aria-valuenow', String(Math.round(pct)));
-  }
+  if (fill) fill.style.width = pct + '%';
 }
 
 function spawnPlayer() {
@@ -408,6 +407,7 @@ function spawnPlayer() {
 
 function removePlayer() {
   if (arena && arena.player) {
+    Assets.disposeObject(arena.player.group);
     arena.scene.remove(arena.player.group);
     arena.player = null;
     window.__player = null;

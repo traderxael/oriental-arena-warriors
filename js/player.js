@@ -64,7 +64,11 @@ function clampToArena(pos, radius) {
 }
 
 function createPlayer(heroId, scene, map) {
-  const hero = HEROES.find((h) => h.id === heroId) || HEROES[0];
+  let hero = HEROES.find((h) => h.id === heroId);
+  if (!hero) {
+    console.warn(`createPlayer: héroe desconocido "${heroId}"; se usa "${HEROES[0] && HEROES[0].id}" por defecto.`);
+    hero = HEROES[0];
+  }
   const arenaRadius = map && typeof map.radius === 'number' ? map.radius : 38;
 
   const group = hero.builder();

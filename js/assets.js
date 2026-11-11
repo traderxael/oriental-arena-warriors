@@ -84,6 +84,30 @@ const Assets = {
       );
     });
   },
+
+  /**
+   * Libera geometrías y materiales de un subárbol (útil al reconstruir
+   * personajes/enemigos entre partidas para no acumular GPU).
+   * @param {THREE.Object3D} root
+   */
+  disposeObject(root) {
+    if (!root || typeof root.traverse !== 'function') return;
+    root.traverse((node) => {
+      if (!node) return;
+      if (node.geometry && typeof node.geometry.dispose === 'function') {
+        node.geometry.dispose();
+      }
+      const mats = Array.isArray(node.material) ? node.material : (node.material ? [node.material] : []);
+      for (const mat of mats) {
+        if (!mat) continue;
+        for (const key of Object.keys(mat)) {
+          const value = mat[key];
+          if (value && value.isTexture && typeof value.dispose === 'function') value.dispose();
+        }
+        if (typeof mat.dispose === 'function') mat.dispose();
+      }
+    });
+  },
 };
 
 export { Assets };
