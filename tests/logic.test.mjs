@@ -293,3 +293,79 @@ test('writeBest: clave por modo roundtrip y saneo, hordas intacto', () => {
   assert.equal(Logic.readBest(s, 'oaw_best_survival'), 777);
   assert.equal(Logic.readBest(s), 0);
 });
+
+/* ---------- Helpers de animación (Fase 5: rigs GLB) ---------- */
+
+test('clipRole: clips HumanSp de Rodin mapean a walk/idle/death', () => {
+  assert.equal(Logic.clipRole('HumanSpJogging'), 'walk');
+  assert.equal(Logic.clipRole('HumanSpWalking'), 'walk');
+  assert.equal(Logic.clipRole('HumanSpOffensiveIdle'), 'idle');
+  assert.equal(Logic.clipRole('HumanSpDying'), 'death');
+});
+
+test('clipRole: nombres genéricos y mayúsculas; desconocido → null', () => {
+  assert.equal(Logic.clipRole('walk'), 'walk');
+  assert.equal(Logic.clipRole('RUN'), 'walk');
+  assert.equal(Logic.clipRole('Idle'), 'idle');
+  assert.equal(Logic.clipRole('death'), 'death');
+  assert.equal(Logic.clipRole('SomeRandomClip'), null);
+  assert.equal(Logic.clipRole(''), null);
+  assert.equal(Logic.clipRole(null), null);
+});
+
+test('stripRootMotion: cero en X/Z de Hips.position, conserva Y (caída/bounce)', () => {
+  const tracks = [
+    { name: 'Hips.position', values: [1, 2, 3, 4, 5, 6] },
+    { name: 'Hips.quaternion', values: [0, 0, 0, 1] },
+    { name: 'Spine.position', values: [7, 8, 9] },
+  ];
+  Logic.stripRootMotion(tracks);
+  assert.deepEqual(Array.from(tracks[0].values), [0, 2, 0, 0, 5, 0]);
+  assert.deepEqual(Array.from(tracks[1].values), [0, 0, 0, 1]);
+  assert.deepEqual(Array.from(tracks[2].values), [7, 8, 9]);
+});
+
+test('stripRootMotion: alias root/hips en minúsculas y entradas inválidas no lanzan', () => {
+  const tracks = [
+    { name: 'root.position', values: new Float32Array([9, 1, 9]) },
+    { name: 'hips.position', values: new Float32Array([8, 2, 8]) },
+    { name: 'Hips.position' },
+    null,
+  ];
+  Logic.stripRootMotion(tracks);
+  assert.deepEqual(Array.from(tracks[0].values), [0, 1, 0]);
+  assert.deepEqual(Array.from(tracks[1].values), [0, 2, 0]);
+  assert.doesNotThrow(() => Logic.stripRootMotion(null));
+  assert.doesNotThrow(() => Logic.stripRootMotion([]));
+});
+
+test('stripRootMotion: soporta prefijos de jerarquía (Armature/Hips, mixamorig:Hips)', () => {
+  const tracks = [
+    { name: 'Armature/Hips.position', values: [3, 1.2, -4, 6, 1.1, -8] },
+    { name: 'mixamorig:Hips.position', values: [2, 0.9, 5] },
+    { name: 'RightHand.position', values: [1, 2, 3] },
+  ];
+  Logic.stripRootMotion(tracks);
+  assert.deepEqual(Array.from(tracks[0].values), [0, 1.2, 0, 0, 1.1, 0]);
+  assert.deepEqual(Array.from(tracks[1].values), [0, 0.9, 0]);
+  assert.deepEqual(Array.from(tracks[2].values), [1, 2, 3]);
+});
+
+test('pickHandBone: prefiere RightHand exacto sobre los dedos', () => {
+  assert.equal(
+    Logic.pickHandBone(['RightHandThumb1', 'LeftHand', 'RightHand', 'Hips']),
+    'RightHand'
+  );
+});
+
+test('pickHandBone: regex hand_r / r_hand como alternativa', () => {
+  assert.equal(Logic.pickHandBone(['LeftHand', 'hand_r']), 'hand_r');
+  assert.equal(Logic.pickHandBone(['mixamorig:RightHand']), 'mixamorig:RightHand');
+  assert.equal(Logic.pickHandBone(['Hips', 'Spine']), null);
+  assert.equal(Logic.pickHandBone([]), null);
+});
+
+test('pickHandBone: override manual gana si existe; si no, cae al regex', () => {
+  assert.equal(Logic.pickHandBone(['LeftHand', 'RightHand'], 'LeftHand'), 'LeftHand');
+  assert.equal(Logic.pickHandBone(['LeftHand', 'RightHand'], 'NoExiste'), 'RightHand');
+});

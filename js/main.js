@@ -255,6 +255,7 @@ function removeEnemies() {
     if (enemy) Enemies.dispose(enemy);
   }
   enemies.length = 0; // array estable: los controladores guardan la referencia
+  Enemies.clearCorpses();
   window.__enemies = enemies;
 }
 
@@ -479,7 +480,11 @@ function spawnPlayer() {
 
 function removePlayer() {
   if (arena && arena.player) {
-    Assets.disposeObject(arena.player.group);
+    if (typeof arena.player.dispose === 'function') {
+      arena.player.dispose();
+    } else {
+      Assets.disposeObject(arena.player.group);
+    }
     arena.scene.remove(arena.player.group);
     arena.player = null;
     window.__player = null;

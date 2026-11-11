@@ -188,6 +188,51 @@
     return (won ? 500 : 0) + hp * 5 + Math.max(0, 300 - t) * 2;
   }
 
+  /* ---------- Helpers de animación (rigs GLB, Fase 5) ---------- */
+
+  // Rol de locomoción de un clip: walk | idle | death | null.
+  function clipRole(name) {
+    var n = String(name == null ? '' : name);
+    if (/dying|death/i.test(n)) return 'death';
+    if (/jog|run|walk/i.test(n)) return 'walk';
+    if (/idle/i.test(n)) return 'idle';
+    return null;
+  }
+
+  // Root motion: anula X/Z de la traslación del hueso raíz (Hips/Root) y
+  // conserva Y (bounce al correr, caída al morir). Muta tracks in situ.
+  function stripRootMotion(tracks) {
+    if (!Array.isArray(tracks)) return tracks;
+    for (var i = 0; i < tracks.length; i += 1) {
+      var tr = tracks[i];
+      if (!tr || typeof tr.name !== 'string' || !tr.values) continue;
+      if (!/(^|[.|/:])(mixamorig)?(hips|root)\.position$/i.test(tr.name)) continue;
+      for (var j = 0; j + 2 < tr.values.length; j += 3) {
+        tr.values[j] = 0;
+        tr.values[j + 2] = 0;
+      }
+    }
+    return tracks;
+  }
+
+  // Hueso de la mano derecha para re-parentar el arma: override manual,
+  // luego nombre exacto, luego anclado, luego regex laxa. null si no hay.
+  function pickHandBone(names, override) {
+    if (!Array.isArray(names)) return null;
+    if (override && names.indexOf(override) !== -1) return override;
+    var i;
+    for (i = 0; i < names.length; i += 1) {
+      if (/^righthand$/i.test(String(names[i]))) return names[i];
+    }
+    for (i = 0; i < names.length; i += 1) {
+      if (/^(right.*hand|hand.*right)$/i.test(String(names[i]))) return names[i];
+    }
+    for (i = 0; i < names.length; i += 1) {
+      if (/hand.*r|r.*hand/i.test(String(names[i]))) return names[i];
+    }
+    return null;
+  }
+
   return {
     waveComposition: waveComposition,
     enemyStats: enemyStats,
@@ -200,5 +245,8 @@
     survivalScore: survivalScore,
     duelStats: duelStats,
     duelScore: duelScore,
+    clipRole: clipRole,
+    stripRootMotion: stripRootMotion,
+    pickHandBone: pickHandBone,
   };
 });

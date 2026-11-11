@@ -32,7 +32,9 @@
    Módulo ES: importa THREE desde el CDN fijado a 0.160.0 (import map).
    ============================================================ */
 import * as THREE from 'three';
+import { Assets } from './assets.js';
 import { HEROES } from './heroes.js';
+import { Characters } from './characters.js';
 
 const PLAYER_RADIUS = 0.7;
 const DASH_SPEED = 13;          // m/s durante el impulso
@@ -98,6 +100,8 @@ function createPlayer(heroId, scene, map) {
     hp: maxHp,
     maxHp,
     alive: true,
+    rig: null,
+    _disposed: false,
     // Combate (Task 5): cadena combo, cooldown del especial, animación de tajo
     comboStep: 0,
     comboExpiresAt: -1,
@@ -171,8 +175,29 @@ function createPlayer(heroId, scene, map) {
         const target = Math.atan2(facing.x, facing.z);
         group.rotation.y = dampAngle(group.rotation.y, target, 12, dt);
       }
+      if (this.rig) {
+        this.rig.setLocomotion(moving || this.dashTime > 0 ? 'walk' : 'idle');
+        this.rig.update(dt);
+      }
+    },
+    dispose() {
+      if (this._disposed) return;
+      this._disposed = true;
+      if (this.rig) {
+        this.rig.dispose();
+        this.rig = null;
+      }
+      Assets.disposeObject(group);
     },
   };
+
+  Characters.upgrade(group, hero.id, {
+    height: 1.8,
+    fallback: hero.builder,
+    isAlive: () => !player._disposed && player.alive,
+  }).then((rig) => {
+    if (rig && !player._disposed) player.rig = rig;
+  });
 
   return player;
 }

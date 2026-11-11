@@ -65,10 +65,10 @@ function attachWeaponGLB(group, weaponLength) {
       const size = box.getSize(new THREE.Vector3());
       const len = Math.max(size.x, size.y, size.z);
       if (len > 0.001) glb.scale.setScalar(glb.scale.x * (weaponLength / len));
-      // Centrar en el pivote (la mano queda en el centro del arma)
+      // Empuñadura (extremo min.y) en la palma; la hoja se proyecta hacia +Y
       const centered = new THREE.Box3().setFromObject(glb);
       const c = centered.getCenter(new THREE.Vector3());
-      glb.position.set(-c.x, -c.y, -c.z);
+      glb.position.set(-c.x, -centered.min.y - weaponLength * 0.14, -c.z);
       Assets.disposeObject(holder);
       holder.clear();
       holder.add(glb);

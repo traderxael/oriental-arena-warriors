@@ -56,6 +56,7 @@
    ============================================================ */
 import * as THREE from 'three';
 import { Assets } from './assets.js';
+import { Characters } from './characters.js';
 
 const KATANA_GLB = 'assets/props/katana.glb';
 const SEPARATION_RADIUS = 0.9;      // m — repulsión entre enemigos
@@ -66,6 +67,21 @@ const SUPPORTS = ['ronin', 'bandido', 'lancero', 'brute', 'maestro'];
 const MAESTRO_WINDUP = 0.5;         // s de telegraph del golpe del maestro
 const MAESTRO_SPECIAL_WINDUP = 0.7; // s de telegraph del giro del maestro
 const MAESTRO_SPECIAL_CD = 9;       // s entre giros del maestro
+const CORPSE_DURATION = 1.4;        // s totales antes de retirar el cadáver
+const CORPSE_DISSOLVE_START = 1.0;  // últimos 0.4 s: disolución progresiva
+const MAX_TOTAL_MIXERS = 26;        // presupuesto global (jugador + enemigos + cadáveres)
+
+const RIG_SPECS = {
+  ronin: { id: 'ashigaru', height: 1.75, tint: { key: 'ronin', color: '#b8b2a6' } },
+  bandido: { id: 'ashigaru', height: 1.68, tint: { key: 'bandido', color: '#e28044' } },
+  lancero: { id: 'ashigaru', height: 1.76, tint: { key: 'lancero', color: '#6482bc' } },
+  brute: { id: 'oni', height: 2.15, tint: null },
+  maestro: {
+    id: 'goro',
+    height: 1.88,
+    tint: { key: 'maestro', color: '#382f22', emissive: '#543c0c', emissiveIntensity: 0.35, metalness: 0.52, roughness: 0.36 },
+  },
+};
 
 /* ---------- Materiales y helpers (patrón heroes.js) ---------- */
 
@@ -196,18 +212,26 @@ function createWeaponPivot(weapon, x, y, z, rotZ) {
   return holder;
 }
 
-/** Sustituye el arma del ronin por el GLB de katana (patrón heroes.js). Nunca lanza. */
+function alignLongestAxisToY(obj) {
+  const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+  if (size.y >= size.x && size.y >= size.z) return;
+  if (size.x >= size.z) obj.rotation.z = Math.PI / 2;
+  else obj.rotation.x = -Math.PI / 2;
+}
+
+/** Sustituye el arma del ronin/maestro por el GLB de katana (empuñadura en la mano). Nunca lanza. */
 function attachRoninWeaponGLB(group) {
   Assets.loadGLB(KATANA_GLB, () => buildShortKatana(0.95)).then((glb) => {
     try {
       const holder = group.getObjectByName('weapon');
       if (!holder) return;
+      alignLongestAxisToY(glb);
       const size = new THREE.Box3().setFromObject(glb).getSize(new THREE.Vector3());
       const len = Math.max(size.x, size.y, size.z);
       if (len > 0.001) glb.scale.setScalar(glb.scale.x * (0.95 / len));
       const centered = new THREE.Box3().setFromObject(glb);
       const c = centered.getCenter(new THREE.Vector3());
-      glb.position.set(-c.x, -c.y, -c.z);
+      glb.position.set(-c.x, -centered.min.y - 0.95 * 0.14, -c.z);
       Assets.disposeObject(holder);
       holder.clear();
       holder.add(glb);
@@ -556,7 +580,8 @@ function spawn(type, wave, map, scene) {
     hp: maxHp,
     maxHp,
     alive: true,
-    ownsResources: true, // geometrías/materiales creados por el builder son propios
+    rig: null,
+    ownsResources: true, // geometrías/materiales no compartidos se liberan con Assets.disposeObject
     attackCooldownUntil: 0,
     windupUntil: 0,      // 0 = sin windup en curso
     pendingDamage: 0,
@@ -575,9 +600,12 @@ function spawn(type, wave, map, scene) {
     update(dt, playerPos, now, player) {
       if (!this.alive) return;
       if (!(dt > 0)) return;
+      const prevX = group.position.x;
+      const prevZ = group.position.z;
       const t = Number(now) || 0;
       if (type === 'maestro') {
         maestroUpdate(this, dt, playerPos, t, player, stats, arenaRadius, obstacles);
+        syncRigLocomotion(this, dt, prevX, prevZ);
         return;
       }
       const px = playerPos && typeof playerPos.x === 'number' ? playerPos.x : 0;
@@ -602,6 +630,7 @@ function spawn(type, wave, map, scene) {
             playerDamageHandler(dmg, this);
           }
         }
+        syncRigLocomotion(this, dt, prevX, prevZ);
         return;
       }
 
@@ -611,6 +640,7 @@ function spawn(type, wave, map, scene) {
         group.position.x += (dx / dist) * step;
         group.position.z += (dz / dist) * step;
         clampToArena(group.position, arenaRadius, obstacles);
+        syncRigLocomotion(this, dt, prevX, prevZ);
         return;
       }
 
@@ -621,6 +651,7 @@ function spawn(type, wave, map, scene) {
         this.attackCooldownUntil = t + stats.attackCooldown;
         setWindupPose(this, 0);
       }
+      syncRigLocomotion(this, dt, prevX, prevZ);
     },
     takeDamage(n) {
       if (!this.alive) return;
@@ -629,12 +660,33 @@ function spawn(type, wave, map, scene) {
         this.alive = false;
         this.windupUntil = 0;
         this.pendingDamage = 0;
-        this.group.visible = false; // Combat también lo oculta; defensa en profundidad
+        if (!this.rig || this.rig.isFallback) {
+          this.group.visible = false; // fallback sin clip de muerte: ocultar al instante
+        }
       }
     },
   };
 
+  const rigSpec = RIG_SPECS[type];
+  if (rigSpec) {
+    Characters.upgrade(group, rigSpec.id, {
+      height: rigSpec.height,
+      tint: rigSpec.tint,
+      fallback: builder,
+      isAlive: () => !enemy._disposed && enemy.alive,
+    }).then((rig) => {
+      if (rig && !enemy._disposed && enemy.alive) enemy.rig = rig;
+    });
+  }
+
   return enemy;
+}
+
+function syncRigLocomotion(enemy, dt, prevX, prevZ) {
+  if (!enemy || !enemy.rig) return;
+  const moved = Math.hypot(enemy.group.position.x - prevX, enemy.group.position.z - prevZ) > 1e-4;
+  enemy.rig.setLocomotion(moved ? 'walk' : 'idle');
+  enemy.rig.update(dt);
 }
 
 /**
@@ -803,26 +855,107 @@ function clampToArena(pos, radius, obstacles) {
   return pos;
 }
 
-/** Libera geometrías/materiales propios del enemigo (no los GLB compartidos). */
+/* ---------- Pool de cadáveres (clip dying + disolución 0.4 s → dispose 1.4 s) ---------- */
+
+const corpses = [];
+
+function disposeCorpse(c) {
+  if (!c || c.disposed) return;
+  c.disposed = true;
+  if (c.group && c.group.parent) c.group.parent.remove(c.group);
+  if (c.rig) {
+    c.rig.dispose();
+    c.rig = null;
+  }
+  if (c.group) Assets.disposeObject(c.group);
+}
+
+function evictExcessCorpses() {
+  while (corpses.length > 0 && Characters.activeMixerCount() > MAX_TOTAL_MIXERS) {
+    disposeCorpse(corpses.shift());
+  }
+}
+
+function moveToCorpsePool(enemy) {
+  if (!enemy || enemy._disposed || !enemy.rig || enemy.rig.isFallback || !enemy.group || !enemy.group.parent) {
+    return false;
+  }
+  enemy.group.visible = true;
+  enemy.group.rotation.x = 0;
+  setWindupPose(enemy, 0);
+  const rig = enemy.rig;
+  enemy.rig = null;
+  enemy._disposed = true;
+  rig.playDeath();
+  corpses.push({
+    group: enemy.group,
+    rig,
+    age: 0,
+    dissolving: false,
+    fadeMats: [],
+    disposed: false,
+  });
+  evictExcessCorpses();
+  return true;
+}
+
+function updateCorpses(dt) {
+  if (!(dt > 0)) return;
+  evictExcessCorpses();
+  for (let i = corpses.length - 1; i >= 0; i -= 1) {
+    const c = corpses[i];
+    c.age += dt;
+    if (c.rig) c.rig.update(dt);
+    if (c.age >= CORPSE_DURATION) {
+      disposeCorpse(c);
+      corpses.splice(i, 1);
+      continue;
+    }
+    if (c.age >= CORPSE_DISSOLVE_START) {
+      if (!c.dissolving) {
+        c.dissolving = true;
+        c.group.traverse((n) => {
+          if (!n || !n.isMesh || !n.material) return;
+          const cloneMat = (m) => {
+            if (!m) return m;
+            const fm = m.clone();
+            fm.userData = { shared: false };
+            fm.transparent = true;
+            fm.depthWrite = false;
+            c.fadeMats.push(fm);
+            return fm;
+          };
+          n.material = Array.isArray(n.material) ? n.material.map(cloneMat) : cloneMat(n.material);
+        });
+      }
+      const alpha = Math.max(0, 1 - (c.age - CORPSE_DISSOLVE_START) / (CORPSE_DURATION - CORPSE_DISSOLVE_START));
+      for (const fm of c.fadeMats) fm.opacity = alpha;
+    }
+  }
+}
+
+function clearCorpses() {
+  while (corpses.length) disposeCorpse(corpses.pop());
+}
+
+/** Libera geometrías/materiales propios del enemigo (nunca los recursos GLB compartidos). */
 function disposeEnemy(enemy) {
   if (!enemy || !enemy.group || enemy._disposed) return;
   if (enemy.group.parent) enemy.group.parent.remove(enemy.group);
+  if (enemy.rig) {
+    enemy.rig.dispose();
+    enemy.rig = null;
+  }
   if (enemy.ownsResources) {
-    enemy.group.traverse((n) => {
-      if (!n) return;
-      if (n.geometry && typeof n.geometry.dispose === 'function') n.geometry.dispose();
-      const mats = Array.isArray(n.material) ? n.material : (n.material ? [n.material] : []);
-      for (const m of mats) {
-        if (m && typeof m.dispose === 'function') m.dispose();
-      }
-    });
+    Assets.disposeObject(enemy.group);
   }
   enemy._disposed = true;
 }
 
 /**
- * Actualiza todos los enemigos. Elimina de la escena y de `list` a los
- * que hayan muerto (hp <= 0), liberando sus recursos propios.
+ * Actualiza todos los enemigos. Retira de `list` inmediatamente a los que
+ * hayan muerto (el despeje de oleada sigue intacto) y pasa los riggeados al
+ * pool de cadáveres (dying + disolve 0.4 s, dispose a los 1.4 s).
  */
 function updateAll(list, dt, playerPos, now, player) {
   if (!Array.isArray(list)) return;
@@ -862,14 +995,19 @@ function updateAll(list, dt, playerPos, now, player) {
     }
   }
 
-  // 3) Limpieza: retirar muertos de la escena y de la lista
+  // 3) Limpieza: retirar muertos de la lista de inmediato (o pasar a cadáveres)
   for (let i = list.length - 1; i >= 0; i -= 1) {
     const enemy = list[i];
     if (enemy && (enemy.alive === false || (Number(enemy.hp) || 0) <= 0)) {
-      disposeEnemy(enemy);
+      if (!moveToCorpsePool(enemy)) {
+        disposeEnemy(enemy);
+      }
       list.splice(i, 1);
     }
   }
+
+  // 4) Avanzar pool de cadáveres (separado de `list`)
+  updateCorpses(dt);
 }
 
 export const Enemies = {
@@ -880,6 +1018,8 @@ export const Enemies = {
   updateAll,
   onPlayerDamage,
   dispose: disposeEnemy,
+  clearCorpses,
+  corpseCount() { return corpses.length; },
 };
 
 // Acceso global de sólo lectura para depuración.

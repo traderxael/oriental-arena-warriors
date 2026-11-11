@@ -518,7 +518,23 @@ function startSurvival(ctx) {
       if (!survival.queue.length) survival.queue = buildQueue(comp);
       if (enemies.length < survival.maxAlive) {
         const type = survival.queue.shift();
-        enemies.push(Enemies.spawn(type, survival.wave, arena, arena.scene));
+        const spawned = Enemies.spawn(type, survival.wave, arena, arena.scene);
+        // Spawns en anillos crecientes alrededor del coliseo (fuera de obstáculos y del jugador)
+        const maxRing = Math.max(14, (arena.radius || 38) - 4);
+        const ringR = Math.min(14 + (survival.wave - 1) * 4, maxRing);
+        const px = player.group.position.x;
+        const pz = player.group.position.z;
+        for (let tries = 0; tries < 10; tries += 1) {
+          const ang = Math.random() * Math.PI * 2;
+          const rr = ringR + (Math.random() - 0.5) * 2.5;
+          const sx = Math.cos(ang) * rr;
+          const sz = Math.sin(ang) * rr;
+          if (!insideObstacle(arena.obstacles, sx, sz) && Math.hypot(sx - px, sz - pz) > 6) {
+            spawned.group.position.set(sx, 0, sz);
+            break;
+          }
+        }
+        enemies.push(spawned);
         window.__enemies = enemies;
         survival.spawnTimer = SPAWN_INTERVAL;
       } else {
