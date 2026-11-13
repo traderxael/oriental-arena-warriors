@@ -49,6 +49,7 @@ var state = 'TITLE';
 let selectedHeroId = HEROES[0].id;
 // Modo elegido en la pantalla de modos ('hordas' | 'supervivencia' | 'duelo').
 let selectedMode = 'hordas';
+let selectedMapId = 'coliseo';
 
 // Reloj de juego (segundos), actualizado cada frame en animateArena.
 // Los handlers de ratón/teclado lo usan para `now` (combos, cooldowns).
@@ -130,7 +131,7 @@ function markEngineReady() {
   if (app) app.classList.remove('hidden');
 }
 
-/* ---------- Arena 3D: Coliseo (Task 3) ---------- */
+/* ---------- Arena 3D: mapa seleccionado ---------- */
 
 let arena = null;        // { scene, camera, renderer, flames, flickerLights, rafId, radius, player }
 let arenaClock = null;
@@ -202,35 +203,51 @@ function startArena() {
     renderer.toneMappingExposure = 1.05;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#efd9a7');
-    scene.fog = new THREE.Fog('#e8c98f', 90, 240);
-
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400);
-
-    const built = Maps.buildColosseum(scene, renderer);
     arena = {
       scene,
       camera,
       renderer,
-      flames: built.flames,
-      flickerLights: built.flickerLights,
-      bounds: built.bounds,
-      spawnPoints: built.spawnPoints,
-      obstacles: built.obstacles,
-      sun: built.sun,
-      radius: built.radius,
+      map: null,
+      mapId: null,
+      flames: [],
+      flickerLights: [],
+      bounds: null,
+      spawnPoints: [],
+      obstacles: [],
+      sun: null,
+      radius: 38,
       rafId: null,
       player: null,
       composer: null,
     };
-    window.__arena = arena; // depuración
-    console.log('Coliseo construido. Radio de colisión: ' + arena.radius + ' — spawn points: ' + arena.spawnPoints.length);
-
+    window.__arena = arena;
     VFX.init(scene);
     Quality.onChange(() => applyQuality());
-    applyQuality();
-
     window.addEventListener('resize', resizeArena);
+  }
+
+  if (arena.map && arena.mapId !== selectedMapId) {
+    VFX.setPetals(0);
+    VFX.clearTransient();
+    Maps.dispose(arena.scene, arena.map);
+    arena.map = null;
+  }
+  if (!arena.map) {
+    const built = Maps.build(selectedMapId, arena.scene, arena.renderer);
+    arena.map = built;
+    arena.mapId = selectedMapId;
+    arena.flames = built.flames;
+    arena.flickerLights = built.flickerLights;
+    arena.bounds = built.bounds;
+    arena.spawnPoints = built.spawnPoints;
+    arena.obstacles = built.obstacles;
+    arena.sun = built.sun;
+    arena.radius = built.radius;
+    window.__arena = arena;
+    VFX.init(arena.scene);
+    applyQuality();
+    console.log(built.name + ' construido. Radio: ' + arena.radius + ' - spawns: ' + arena.spawnPoints.length);
   }
 
   resizeArena();
@@ -748,6 +765,8 @@ function go(screenId, nextState) {
 function startGame() {
   ui.resetHud();
   ui.setHudMode(selectedMode);
+  const mapLabel = document.getElementById('hud-map');
+  if (mapLabel) mapLabel.textContent = Maps.getName(selectedMapId);
   go('hud', 'PLAY');
   startArena();
   spawnPlayer();
@@ -784,9 +803,12 @@ function bindUI() {
   });
   document.getElementById('btn-hero-continue').addEventListener('click', () => go('map', 'MAP'));
 
-  // Mapa → Juego (sólo Coliseo está habilitado por ahora)
+  // Mapa → Juego
   document.querySelectorAll('#screen-map .map-card:not(.disabled)').forEach((btn) => {
-    btn.addEventListener('click', () => startGame());
+    btn.addEventListener('click', () => {
+      selectedMapId = btn.dataset.map || 'coliseo';
+      startGame();
+    });
   });
 
   // Botones "Volver" genéricos: data-back="<pantalla destino>"

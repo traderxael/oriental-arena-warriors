@@ -2,13 +2,17 @@
    maps.js — Construcción de mapas/arenas
 
    Interfaz pública:
-     Maps.buildColosseum(scene) -> {
+     Maps.build(id, scene, renderer) -> {
+       name: string,
+       root: THREE.Group,
        bounds: { minX, maxX, minZ, maxZ },
        spawnPoints: THREE.Vector3[],
        radius: 38,
        flames: THREE.Mesh[],        // conos de llama (userData.isFlame) para animar
        flickerLights: THREE.PointLight[],
      }
+
+     Maps.dispose(scene, built) libera el mapa al seleccionar otra arena.
 
    El Coliseo es circular: la colisión de jugador/enemigo debe usar
    `radius` (distancia al origen en XZ), no `bounds` (caja envolvente).
@@ -111,6 +115,233 @@ function buildProceduralColumn() {
   return g;
 }
 
+function addBox(root, width, height, depth, color, x, y, z, options = {}) {
+  const mesh = shadowed(new THREE.Mesh(
+    new THREE.BoxGeometry(width, height, depth),
+    std(color, options.material || {})
+  ), options.castShadow !== false, options.receiveShadow !== false);
+  mesh.position.set(x, y, z);
+  if (options.rotationY) mesh.rotation.y = options.rotationY;
+  root.add(mesh);
+  return mesh;
+}
+
+function addCylinder(root, top, bottom, height, color, x, y, z, segments = 10) {
+  const mesh = shadowed(new THREE.Mesh(
+    new THREE.CylinderGeometry(top, bottom, height, segments), std(color)
+  ));
+  mesh.position.set(x, y, z);
+  root.add(mesh);
+  return mesh;
+}
+
+function appendBoxPart(parts, width, height, depth, x, y, z, rotationY = 0) {
+  const geometry = new THREE.BoxGeometry(width, height, depth);
+  const matrix = new THREE.Matrix4().makeRotationY(rotationY);
+  matrix.setPosition(x, y, z);
+  geometry.applyMatrix4(matrix);
+  parts.push(geometry);
+}
+
+function appendMergedParts(root, parts, material) {
+  if (!parts.length) return null;
+  const geometry = mergeGeometries(parts);
+  parts.forEach((part) => part.dispose());
+  const mesh = shadowed(new THREE.Mesh(geometry, material));
+  root.add(mesh);
+  return mesh;
+}
+
+function addArenaFloor(root, radius, color, texture, ringColor) {
+  const ground = shadowed(new THREE.Mesh(
+    new THREE.CircleGeometry(radius, 64), std(color, { roughness: 1, map: texture })
+  ), false, true);
+  ground.rotation.x = -Math.PI / 2;
+  root.add(ground);
+  const outer = new THREE.Mesh(new THREE.CircleGeometry(260, 32), std('#34332f', { roughness: 1 }));
+  outer.rotation.x = -Math.PI / 2;
+  outer.position.y = -0.04;
+  root.add(outer);
+  const borderGeo = new THREE.RingGeometry(radius - 0.8, radius, 64);
+  borderGeo.rotateX(-Math.PI / 2);
+  const border = new THREE.Mesh(borderGeo, std(ringColor, { metalness: 0.22, roughness: 0.55 }));
+  border.position.y = 0.025;
+  root.add(border);
+}
+
+function addLanterns(root, positions, scale = 1) {
+  const parts = [
+    { geometry: new THREE.BoxGeometry(0.9, 0.3, 0.9), material: std('#514638'), y: 0.15 },
+    { geometry: new THREE.CylinderGeometry(0.12, 0.17, 1.55, 8), material: std('#594b3b'), y: 1.05 },
+    { geometry: new THREE.BoxGeometry(0.8, 0.75, 0.8), material: std('#e5c984', { emissive: '#e9a849', emissiveIntensity: 0.38, roughness: 0.72 }), y: 2.15, cast: false },
+    { geometry: new THREE.BoxGeometry(1.04, 0.16, 1.04), material: std('#382a20'), y: 2.61 },
+    { geometry: new THREE.BoxGeometry(1.28, 0.18, 1.28), material: std('#4c3328'), y: 2.79 },
+    { geometry: new THREE.CylinderGeometry(0, 0.12, 0.42, 4), material: std('#4c3328'), y: 3.08 },
+  ];
+  parts.forEach((part) => {
+    const mesh = new THREE.InstancedMesh(part.geometry, part.material, positions.length);
+    mesh.castShadow = part.cast !== false;
+    mesh.receiveShadow = part.cast !== false;
+    positions.forEach(([x, z], index) => {
+      const matrix = new THREE.Matrix4().compose(
+        new THREE.Vector3(x, part.y * scale, z),
+        new THREE.Quaternion(),
+        new THREE.Vector3(scale, scale, scale)
+      );
+      mesh.setMatrixAt(index, matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    root.add(mesh);
+  });
+}
+
+function addTorii(root, z, scale = 1) {
+  const half = 4.1 * scale;
+  const redParts = [];
+  appendBoxPart(redParts, 0.62 * scale, 6.1 * scale, 0.62 * scale, -half, 3.05 * scale, z);
+  appendBoxPart(redParts, 0.62 * scale, 6.1 * scale, 0.62 * scale, half, 3.05 * scale, z);
+  appendBoxPart(redParts, 11.4 * scale, 0.65 * scale, 1.0 * scale, 0, 6.35 * scale, z);
+  appendMergedParts(root, redParts, std('#a0342c'));
+  const goldParts = [];
+  appendBoxPart(goldParts, 9.6 * scale, 0.26 * scale, 1.12 * scale, 0, 5.86 * scale, z);
+  appendMergedParts(root, goldParts, std('#d4af37', { metalness: 0.25 }));
+  return [
+    { x: -half, z, r: 0.72 * scale },
+    { x: half, z, r: 0.72 * scale },
+  ];
+}
+
+function addPagodaBuilding(root, x, z, baseY = 0, scale = 1, palette = {}) {
+  const wood = palette.wood || '#53352d';
+  const roof = palette.roof || '#a0342c';
+  const gold = palette.gold || '#d4af37';
+  const levels = [
+    { y: 1.4, w: 7.0, h: 1.2 },
+    { y: 4.2, w: 5.6, h: 1.05 },
+    { y: 6.75, w: 4.2, h: 0.95 },
+    { y: 9.0, w: 2.8, h: 0.8 },
+  ];
+  addBox(root, 6.2 * scale, 0.75 * scale, 6.2 * scale, '#82735d', x, baseY + 0.38 * scale, z);
+  const woodParts = [];
+  const goldParts = [];
+  const roofParts = [];
+  levels.forEach(({ y, w, h }, index) => {
+    const sy = baseY + y * scale;
+    const width = w * scale;
+    const body = width * 0.68;
+    appendBoxPart(woodParts, body, h * scale, body, x, sy, z);
+    [-1, 1].forEach((side) => {
+      appendBoxPart(goldParts, 0.12 * scale, h * 0.85 * scale, body + 0.1 * scale, x + side * body * 0.47, sy, z);
+      appendBoxPart(goldParts, body + 0.1 * scale, h * 0.85 * scale, 0.12 * scale, x, sy, z + side * body * 0.47);
+    });
+    const roofGeometry = new THREE.CylinderGeometry(width * 0.58, width * 0.78, 0.48 * scale, 4);
+    const roofMatrix = new THREE.Matrix4().makeRotationY(Math.PI / 4);
+    roofMatrix.setPosition(x, sy + h * 0.62 * scale, z);
+    roofGeometry.applyMatrix4(roofMatrix);
+    roofParts.push(roofGeometry);
+    appendBoxPart(goldParts, width * 0.84, 0.12 * scale, width * 0.84, x, sy + h * 0.42 * scale, z);
+    if (index === levels.length - 1) {
+      addCylinder(root, 0.04 * scale, 0.14 * scale, 1.7 * scale, gold, x, sy + 1.05 * scale, z, 6);
+    }
+  });
+  appendMergedParts(root, woodParts, std(wood));
+  appendMergedParts(root, goldParts, std(gold, { metalness: 0.35 }));
+  appendMergedParts(root, roofParts, std(roof, { roughness: 0.64, metalness: 0.08 }));
+}
+
+function addColumns(root, positions, scale = 1) {
+  const parts = [
+    { geometry: new THREE.BoxGeometry(1.3, 0.35, 1.3), material: std('#a1937a'), y: 0.175 },
+    { geometry: new THREE.CylinderGeometry(0.42, 0.52, 4.4, 12), material: std('#cbbd9d'), y: 2.3 },
+    { geometry: new THREE.BoxGeometry(1.2, 0.35, 1.2), material: std('#a1937a'), y: 4.65 },
+  ];
+  parts.forEach((part) => {
+    const mesh = new THREE.InstancedMesh(part.geometry, part.material, positions.length);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    positions.forEach(([x, z], index) => {
+      mesh.setMatrixAt(index, new THREE.Matrix4().compose(
+        new THREE.Vector3(x, part.y * scale, z),
+        new THREE.Quaternion(),
+        new THREE.Vector3(scale, scale, scale)
+      ));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    root.add(mesh);
+  });
+}
+
+function addSharedLighting(scene, root, renderer, theme) {
+  scene.background = new THREE.Color(theme.background);
+  scene.fog = new THREE.Fog(theme.fog, theme.fogNear || 78, theme.fogFar || 220);
+  const sky = new Sky();
+  sky.scale.setScalar(4500);
+  const uniforms = sky.material.uniforms;
+  uniforms.turbidity.value = theme.turbidity || 6;
+  uniforms.rayleigh.value = theme.rayleigh || 1.8;
+  uniforms.mieCoefficient.value = 0.005;
+  uniforms.mieDirectionalG.value = 0.8;
+  const sunPosition = new THREE.Vector3(...(theme.sunPosition || [34, 46, 20])).normalize();
+  uniforms.sunPosition.value.copy(sunPosition);
+  root.add(sky);
+
+  let environment = null;
+  if (renderer) {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const skyScene = new THREE.Scene();
+    skyScene.add(sky.clone());
+    environment = pmrem.fromScene(skyScene, 0, 0.1, 10000).texture;
+    scene.environment = environment;
+    pmrem.dispose();
+  }
+  root.add(new THREE.HemisphereLight(theme.hemisphere || '#fff3d6', theme.ground || '#50483f', 0.9));
+  const sun = new THREE.DirectionalLight(theme.sun || '#ffe6b3', 1.65);
+  sun.position.copy(sunPosition.clone().multiplyScalar(72));
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -48;
+  sun.shadow.camera.right = 48;
+  sun.shadow.camera.top = 48;
+  sun.shadow.camera.bottom = -48;
+  sun.shadow.camera.far = 130;
+  sun.shadow.bias = -0.0005;
+  root.add(sun);
+  const fill = new THREE.DirectionalLight(theme.fill || '#ffd9a8', 0.42);
+  fill.position.set(-18, 14, -24);
+  root.add(fill);
+  return { sun, environment };
+}
+
+function loadProp(root, path, fallbackBuilder, x, z, targetHeight) {
+  Assets.loadGLB(path, fallbackBuilder).then((obj) => {
+    if (root.userData.mapDisposed) {
+      Assets.disposeObject(obj);
+      return;
+    }
+    root.add(placeOnGround(obj, x, z, targetHeight));
+  });
+}
+
+function finishArena(scene, root, renderer, name, spawnPoints, obstacles, theme, extras = {}) {
+  const lighting = addSharedLighting(scene, root, renderer, theme);
+  scene.add(root);
+  return {
+    name,
+    root,
+    environment: lighting.environment,
+    sun: lighting.sun,
+    bounds: { minX: -RADIUS, maxX: RADIUS, minZ: -RADIUS, maxZ: RADIUS },
+    radius: RADIUS,
+    spawnPoints,
+    obstacles,
+    flames: [],
+    flickerLights: [],
+    ...extras,
+  };
+}
+
 /* ---------- Construcción del Coliseo ---------- */
 
 const Maps = {
@@ -122,6 +353,7 @@ const Maps = {
   buildColosseum(scene, renderer) {
     const root = new THREE.Group();
     root.name = 'colosseum';
+    root.userData.mapDisposed = false;
     const flames = [];
     const flickerLights = [];
 
@@ -293,19 +525,24 @@ const Maps = {
 
     // Puerta principal: intentar arco GLB decorativo (fallback: arco procedural)
     Assets.loadGLB('assets/props/arch.glb', buildProceduralArch).then((arch) => {
+      if (root.userData.mapDisposed) {
+        Assets.disposeObject(arch);
+        return;
+      }
       arch.scale.setScalar(1);
       const box = new THREE.Box3().setFromObject(arch);
       const w = box.getSize(new THREE.Vector3()).x;
       if (w > 0.001) arch.scale.setScalar(7.4 / w);
       arch.position.set(0, 5.7, RADIUS - 0.6);
       arch.rotation.y = Math.PI;
-      scene.add(arch);
+      root.add(arch);
     }).catch(() => {
       // loadGLB nunca rechaza; defensa en profundidad
+      if (root.userData.mapDisposed) return;
       const arch = buildProceduralArch();
       arch.position.set(0, 5.7, RADIUS - 0.6);
       arch.rotation.y = Math.PI;
-      scene.add(arch);
+      root.add(arch);
     });
 
     // --- 2 antorchas flanqueando la puerta principal ---
@@ -317,13 +554,7 @@ const Maps = {
       const phase = i * 2.13;
 
       // Poste/peana: GLB si carga, fallback procedural si no
-      Assets.loadGLB('assets/props/torch.glb', buildProceduralTorch).then((torch) => {
-        const t = placeOnGround(torch, x, z, 2.9);
-        scene.add(t);
-      }).catch(() => {
-        const t = placeOnGround(buildProceduralTorch(), x, z, 2.9);
-        scene.add(t);
-      });
+      loadProp(root, 'assets/props/torch.glb', buildProceduralTorch, x, z, 2.9);
 
       // Llama: cono animado + PointLight (siempre procedural)
       const flame = new THREE.Mesh(
@@ -351,9 +582,7 @@ const Maps = {
       const x = 35 * Math.sin(a);
       const z = 35 * Math.cos(a);
       obstacles.push({ x, z, r: 1.3 });
-      Assets.loadGLB('assets/props/cherry-tree.glb', buildProceduralCherry).then((tree) => {
-        scene.add(placeOnGround(tree, x, z, 6.5));
-      });
+      loadProp(root, 'assets/props/cherry-tree.glb', buildProceduralCherry, x, z, 6.5);
     });
     GATE_ANGLES.forEach((a) => {
       [-0.22, 0.22].forEach((off) => {
@@ -361,44 +590,16 @@ const Maps = {
         const x = 36 * Math.sin(ja);
         const z = 36 * Math.cos(ja);
         obstacles.push({ x, z, r: 0.8 });
-        Assets.loadGLB('assets/props/column.glb', buildProceduralColumn).then((col) => {
-          scene.add(placeOnGround(col, x, z, 5.2));
-        });
+        loadProp(root, 'assets/props/column.glb', buildProceduralColumn, x, z, 5.2);
       });
     });
 
     // --- Cielo físico (Sky addon) + environment map para metales ---
-    const sky = new Sky();
-    sky.scale.setScalar(4500);
-    const skyU = sky.material.uniforms;
-    skyU.turbidity.value = 6;
-    skyU.rayleigh.value = 1.8;
-    skyU.mieCoefficient.value = 0.005;
-    skyU.mieDirectionalG.value = 0.8;
-    skyU.sunPosition.value.copy(new THREE.Vector3(34, 46, 20).normalize());
-    if (renderer) {
-      const pmrem = new THREE.PMREMGenerator(renderer);
-      const skyScene = new THREE.Scene();
-      skyScene.add(sky);
-      scene.environment = pmrem.fromScene(skyScene, 0, 0.1, 10000).texture;
-      pmrem.dispose();
-    }
-    root.add(sky);
-
-    // --- Luces de la escena: sol cálido + ambiente hemisférico ---
-    const hemi = new THREE.HemisphereLight('#fff3d6', '#5a4632', 0.8);
-    root.add(hemi);
-    const sun = new THREE.DirectionalLight('#ffe6b3', 1.7);
-    sun.position.set(34, 46, 20);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -55;
-    sun.shadow.camera.right = 55;
-    sun.shadow.camera.top = 55;
-    sun.shadow.camera.bottom = -55;
-    sun.shadow.camera.far = 130;
-    sun.shadow.bias = -0.0005;
-    root.add(sun);
+    const lighting = addSharedLighting(scene, root, renderer, {
+      background: '#efd9a7', fog: '#e8c98f', hemisphere: '#fff3d6', ground: '#5a4632',
+      sun: '#ffe6b3', fill: '#ffd9a8', sunPosition: [34, 46, 20],
+    });
+    const sun = lighting.sun;
     // Relleno cálido desde el interior de la arena hacia la puerta principal:
     // el arch.glb mira a -z (de cara al jugador) y el sol queda a sus espaldas;
     // sin esta luz la cara del arco se ve casi negra de frente. Sin sombras.
@@ -416,7 +617,185 @@ const Maps = {
       flickerLights,
       obstacles,
       sun,
+      root,
+      environment: lighting.environment,
+      name: 'Coliseo del Sol Naciente',
     };
+  },
+  buildTemple(scene, renderer) {
+    const root = new THREE.Group();
+    root.name = 'temple-courtyard';
+    root.userData.mapDisposed = false;
+    addArenaFloor(root, RADIUS, '#91866b', Textures.stone(9, 9), '#b89a59');
+
+    const path = addBox(root, 6.4, 0.08, 54, '#b9a982', 0, 0.06, 0);
+    path.material.map = Textures.stone(2, 12);
+    path.material.needsUpdate = true;
+    const dais = new THREE.Mesh(new THREE.CircleGeometry(7.6, 48), std('#756951'));
+    dais.rotation.x = -Math.PI / 2;
+    dais.position.y = 0.09;
+    root.add(dais);
+    const emblemGeo = new THREE.RingGeometry(7.7, 8.1, 48);
+    emblemGeo.rotateX(-Math.PI / 2);
+    const emblem = new THREE.Mesh(emblemGeo, std('#d4af37', { metalness: 0.35 }));
+    emblem.position.y = 0.1;
+    root.add(emblem);
+
+    addPagodaBuilding(root, 0, -29, 0, 0.72, {
+      wood: '#72563c', roof: '#873d32', gold: '#c6a256',
+    });
+    const obstacles = [{ x: 0, z: -29, r: 4.9 }, ...addTorii(root, 33, 0.7)];
+    const lanternPositions = [[-15, -12], [15, -12], [-15, 12], [15, 12]];
+    addLanterns(root, lanternPositions, 0.64);
+    lanternPositions.forEach(([x, z]) => {
+      obstacles.push({ x, z, r: 0.8 });
+    });
+    const columnPositions = [[-31, -11], [31, -11], [-31, 11], [31, 11]];
+    addColumns(root, columnPositions, 0.95);
+    columnPositions.forEach(([x, z]) => {
+      obstacles.push({ x, z, r: 0.9 });
+    });
+
+    const spawns = [
+      new THREE.Vector3(-25, 0, 17), new THREE.Vector3(25, 0, 17),
+      new THREE.Vector3(-25, 0, -17), new THREE.Vector3(25, 0, -17),
+    ];
+    return finishArena(scene, root, renderer, 'Templo de los Cuatro Vientos', spawns, obstacles, {
+      background: '#b8c5bd', fog: '#a9b9ad', hemisphere: '#eff4df', ground: '#545c4a',
+      sun: '#fff0c4', fill: '#e4d7ae', sunPosition: [28, 48, 18], turbidity: 7,
+    });
+  },
+  buildPagoda(scene, renderer) {
+    const root = new THREE.Group();
+    root.name = 'pagoda-terrace';
+    root.userData.mapDisposed = false;
+    addArenaFloor(root, RADIUS, '#777a75', Textures.stone(12, 12), '#c5a857');
+    const ringParts = [12, 22, 31].map((r) => {
+      const geometry = new THREE.RingGeometry(r, r + 0.36, 64);
+      geometry.rotateX(-Math.PI / 2);
+      return geometry;
+    });
+    const rings = new THREE.Mesh(mergeGeometries(ringParts), std('#bca46a', { metalness: 0.24 }));
+    rings.position.y = 0.04;
+    rings.receiveShadow = true;
+    ringParts.forEach((geometry) => geometry.dispose());
+    root.add(rings);
+
+    addPagodaBuilding(root, 0, -29, 0, 0.76, {
+      wood: '#454842', roof: '#31554e', gold: '#d3b15f',
+    });
+    const obstacles = [{ x: 0, z: -29, r: 5.2 }];
+    const gate = addTorii(root, 32, 0.66);
+    gate.forEach((obstacle) => obstacles.push(obstacle));
+    const lanternPositions = [[-13, 22], [13, 22], [-13, -10], [13, -10]];
+    addLanterns(root, lanternPositions, 0.58);
+    lanternPositions.forEach(([x, z]) => {
+      obstacles.push({ x, z, r: 0.72 });
+    });
+    const columnPositions = [[-31, 0], [31, 0], [0, 31], [0, -34]];
+    addColumns(root, columnPositions, 1.02);
+    columnPositions.forEach(([x, z]) => {
+      obstacles.push({ x, z, r: 0.8 });
+    });
+    const spawns = [
+      new THREE.Vector3(-23, 0, 23), new THREE.Vector3(23, 0, 23),
+      new THREE.Vector3(-23, 0, -23), new THREE.Vector3(23, 0, -23),
+    ];
+    return finishArena(scene, root, renderer, 'Pagoda de la Niebla', spawns, obstacles, {
+      background: '#a8b9c2', fog: '#92a5af', hemisphere: '#e7f0ea', ground: '#46535a',
+      sun: '#f4ddb1', fill: '#c8d9d2', sunPosition: [-28, 44, 22], turbidity: 8, rayleigh: 2.2,
+    });
+  },
+  buildGardens(scene, renderer) {
+    const root = new THREE.Group();
+    root.name = 'zen-gardens';
+    root.userData.mapDisposed = false;
+    addArenaFloor(root, RADIUS, '#81966a', Textures.sand(9, 9), '#d2bb83');
+
+    addBox(root, 5.2, 0.09, 48, '#b6aa8c', 0, 0.06, 0, {
+      material: { roughness: 1, map: Textures.stone(2, 9) },
+    });
+    addBox(root, 48, 0.09, 5.2, '#b6aa8c', 0, 0.065, 0, {
+      material: { roughness: 1, map: Textures.stone(9, 2) },
+    });
+    [[-8, -7], [8, -7], [-8, 7], [8, 7]].forEach(([x, z], index) => {
+      const stone = shadowed(new THREE.Mesh(
+        new THREE.CylinderGeometry(1.6, 1.85, 0.18, 7), std(index % 2 ? '#777968' : '#918a70')
+      ));
+      stone.position.set(x, 0.12, z);
+      root.add(stone);
+    });
+
+    const pond = shadowed(new THREE.Mesh(
+      new THREE.CircleGeometry(4.6, 40), new THREE.MeshStandardMaterial({
+        color: '#4a7b80', roughness: 0.28, metalness: 0.18, transparent: true, opacity: 0.94,
+      })
+    ), false, false);
+    pond.rotation.x = -Math.PI / 2;
+    pond.scale.set(1.25, 0.82, 1);
+    pond.position.set(22, 0.035, -20);
+    root.add(pond);
+    const pondEdgeGeo = new THREE.RingGeometry(4.6, 5.25, 40);
+    pondEdgeGeo.rotateX(-Math.PI / 2);
+    const pondEdge = new THREE.Mesh(pondEdgeGeo, std('#817966'));
+    pondEdge.scale.set(1.25, 0.82, 1);
+    pondEdge.position.set(22, 0.04, -20);
+    root.add(pondEdge);
+    addBox(root, 9.5, 0.24, 1.7, '#6b4a2f', 22, 0.32, -20);
+    addBox(root, 9.5, 0.14, 0.18, '#a08056', 22, 0.75, -21.1);
+    addBox(root, 9.5, 0.14, 0.18, '#a08056', 22, 0.75, -18.9);
+
+    const obstacles = [
+      ...addTorii(root, 33, 0.56),
+      { x: 22, z: -20, r: 4.3 },
+    ];
+    [[-30, -14], [30, -14], [-30, 14], [30, 14]].forEach(([x, z]) => {
+      loadProp(root, 'assets/props/cherry-tree.glb', buildProceduralCherry, x, z, 6.5);
+      obstacles.push({ x, z, r: 1.65 });
+    });
+    const lanternPositions = [[-15, 24], [15, 24], [-15, -24], [15, -24]];
+    addLanterns(root, lanternPositions, 0.55);
+    lanternPositions.forEach(([x, z]) => {
+      obstacles.push({ x, z, r: 0.72 });
+    });
+    const spawns = [
+      new THREE.Vector3(-29, 0, 0), new THREE.Vector3(29, 0, 0),
+      new THREE.Vector3(0, 0, -29), new THREE.Vector3(0, 0, 29),
+    ];
+    return finishArena(scene, root, renderer, 'Jardines del Ciruelo', spawns, obstacles, {
+      background: '#bdc49b', fog: '#a9b78b', hemisphere: '#f3f4d9', ground: '#455b43',
+      sun: '#fff0c4', fill: '#d7e2ae', sunPosition: [24, 50, -18], turbidity: 5.5,
+    });
+  },
+  build(id, scene, renderer) {
+    const builders = {
+      coliseo: Maps.buildColosseum,
+      templo: Maps.buildTemple,
+      pagoda: Maps.buildPagoda,
+      jardines: Maps.buildGardens,
+    };
+    return (builders[id] || Maps.buildColosseum)(scene, renderer);
+  },
+  getName(id) {
+    const names = {
+      coliseo: 'Coliseo del Sol Naciente',
+      templo: 'Templo de los Cuatro Vientos',
+      pagoda: 'Pagoda de la Niebla',
+      jardines: 'Jardines del Ciruelo',
+    };
+    return names[id] || names.coliseo;
+  },
+  dispose(scene, built) {
+    if (!built) return;
+    if (built.root) {
+      built.root.userData.mapDisposed = true;
+      scene.remove(built.root);
+      Assets.disposeObject(built.root);
+    }
+    if (built.environment) {
+      if (scene.environment === built.environment) scene.environment = null;
+      built.environment.dispose();
+    }
   },
 };
 

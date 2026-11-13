@@ -18,7 +18,7 @@ falla o tarda más de 8 s en cargar, el juego usa un builder procedural equivale
 - Título: Column
 - Fuente (URL): https://poly.pizza/m/wLubNpOTX4 — https://static.poly.pizza/5239f88f-e30b-452b-a19e-89745d580b1e.glb
 - Licencia: Public Domain (CC0) — https://creativecommons.org/publicdomain/zero/1.0/
-- Cambios realizados: ninguno (×6 flanqueando las puertas del Coliseo, con colisionador circular)
+- Cambios realizados: ninguno (Coliseo, Templo y Pagoda; con colisionadores circulares)
 
 ### Arch (assets/props/arch.glb)
 - Autor: Quaternius
@@ -39,7 +39,7 @@ falla o tarda más de 8 s en cargar, el juego usa un builder procedural equivale
 - Título: Cherry tree
 - Fuente (URL): https://poly.pizza/m/1FSDzk-LRdA — https://static.poly.pizza/9deb3271-411a-476b-a01b-e82e27077e72.glb
 - Licencia: CC-BY 3.0 — https://creativecommons.org/licenses/by/3.0/ (atribución: "Cherry tree" by Poly by Google)
-- Cambios realizados: ninguno (×3 en el anillo interior del Coliseo, con colisionador circular)
+- Cambios realizados: ninguno (Coliseo y Jardines; con colisionadores circulares)
 
 ## Personajes generados con IA (assets/characters/)
 
@@ -78,3 +78,8 @@ El Coliseo (arena, muro, gradas, arcadas, puertas, llamas, luces) y los builders
 `#c9a86a` con anillos, emblema central lacre/dorado, gradas en 3 anillos de cajas,
 2 niveles de arcadas (BoxGeometry + TorusGeometry medio) y muro perimetral cilíndrico
 con huecos de puerta.
+
+El Templo de los Cuatro Vientos, la Pagoda de la Niebla y los Jardines del Ciruelo
+se construyen con geometria y materiales procedurales de Three.js, sin descargas
+nuevas. Jardines reutiliza los cerezos acreditados arriba; las columnas, edificios,
+torii, faroles, estanque y caminos de estos mapas son procedurales.

@@ -742,6 +742,16 @@ body {
   text-transform: uppercase;
   color: var(--papel);
 }
+.hud-map {
+  padding: 0.2rem 0.55rem;
+  color: var(--papel);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: right;
+  text-shadow: 0 2px 5px #000;
+  text-transform: uppercase;
+}
 
 /* Barra de vida del boss (Duelo), centrada arriba */
 .hud-boss {

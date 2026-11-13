@@ -5,8 +5,10 @@ Juego de combate 3D para navegador, hecho con Three.js r160 y servido como sitio
 ## Estado actual
 
 - Tres guerreros seleccionables: Akane, Goro y Tsuki, un conejo samurái con armadura jade y wakizashi.
-- Tres modos jugables en el Coliseo del Sol Naciente: Hordas, Supervivencia por oleadas con power-ups y Duelo contra el Maestro.
-- Arena con cielo y texturas procedurales, árboles de cerezo, columnas, pétalos, estelas de dash, partículas y bloom.
+- Tres modos jugables: Hordas, Supervivencia por oleadas con power-ups y Duelo contra el Maestro.
+- Cuatro mapas seleccionables: Coliseo del Sol Naciente, Templo de los Cuatro Vientos, Pagoda de la Niebla y Jardines del Ciruelo.
+- Cada mapa tiene iluminación y decoración propias, puntos de aparición despejados y colisiones para sus obstáculos.
+- Cielos y texturas procedurales, árboles de cerezo, columnas, pétalos, estelas de dash, partículas y bloom.
 - Modelos GLB riggeados para Akane, Goro y enemigos. Tsuki usa un builder procedural y sigue disponible sin descargas de personaje.
 - Calidad Alta, Media y Baja; se puede fijar con `?quality=alta`, `?quality=media` o `?quality=baja`.
 
