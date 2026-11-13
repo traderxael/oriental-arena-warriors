@@ -641,10 +641,10 @@ const Maps = {
     emblem.position.y = 0.1;
     root.add(emblem);
 
-    addPagodaBuilding(root, 0, -29, 0, 0.72, {
+    addPagodaBuilding(root, 0, 29, 0, 0.72, {
       wood: '#72563c', roof: '#873d32', gold: '#c6a256',
     });
-    const obstacles = [{ x: 0, z: -29, r: 4.9 }, ...addTorii(root, 33, 0.7)];
+    const obstacles = [{ x: 0, z: 29, r: 4.9 }, ...addTorii(root, -33, 0.7)];
     const lanternPositions = [[-15, -12], [15, -12], [-15, 12], [15, 12]];
     addLanterns(root, lanternPositions, 0.64);
     lanternPositions.forEach(([x, z]) => {
@@ -681,18 +681,18 @@ const Maps = {
     ringParts.forEach((geometry) => geometry.dispose());
     root.add(rings);
 
-    addPagodaBuilding(root, 0, -29, 0, 0.76, {
+    addPagodaBuilding(root, 0, 29, 0, 0.76, {
       wood: '#454842', roof: '#31554e', gold: '#d3b15f',
     });
-    const obstacles = [{ x: 0, z: -29, r: 5.2 }];
-    const gate = addTorii(root, 32, 0.66);
+    const obstacles = [{ x: 0, z: 29, r: 5.2 }];
+    const gate = addTorii(root, -32, 0.66);
     gate.forEach((obstacle) => obstacles.push(obstacle));
     const lanternPositions = [[-13, 22], [13, 22], [-13, -10], [13, -10]];
     addLanterns(root, lanternPositions, 0.58);
     lanternPositions.forEach(([x, z]) => {
       obstacles.push({ x, z, r: 0.72 });
     });
-    const columnPositions = [[-31, 0], [31, 0], [0, 31], [0, -34]];
+    const columnPositions = [[-31, 0], [31, 0], [0, -33]];
     addColumns(root, columnPositions, 1.02);
     columnPositions.forEach(([x, z]) => {
       obstacles.push({ x, z, r: 0.8 });

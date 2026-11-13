@@ -42,8 +42,14 @@ const DASH_TIME = 0.18;         // s de impulso
 const DASH_IFRAMES = 0.35;      // s de invulnerabilidad
 const DASH_COOLDOWN = 1.2;      // s entre dashes
 const UP = new THREE.Vector3(0, 1, 0);
+const CAMERA_TARGET_HEIGHT = 1.3;
+const CAMERA_MIN_DISTANCE = 4.8;
+const CAMERA_MAX_DISTANCE = 12;
+const CAMERA_MIN_PITCH = 0.12;
+const CAMERA_MAX_PITCH = 0.95;
 
-export const CAMERA_OFFSET = new THREE.Vector3(0, 4.2, 6.5);
+// Los guerreros avanzan hacia +Z; la cámara debe quedarse detrás, en -Z.
+export const CAMERA_OFFSET = new THREE.Vector3(0, 4.2, -6.5);
 
 /** Interpola ángulos por el camino corto. */
 function dampAngle(current, target, lambda, dt) {
@@ -117,6 +123,10 @@ function createPlayer(heroId, scene, map) {
     dashTime: 0,
     dashCooldown: 0,
     invulnerableUntil: -1,
+    // Giro relativo a la espalda del héroe; así la cámara lo sigue al girar.
+    cameraYaw: 0,
+    cameraPitch: Math.atan2(CAMERA_OFFSET.y - CAMERA_TARGET_HEIGHT, Math.hypot(CAMERA_OFFSET.x, CAMERA_OFFSET.z)),
+    cameraDistance: Math.hypot(CAMERA_OFFSET.y - CAMERA_TARGET_HEIGHT, Math.hypot(CAMERA_OFFSET.x, CAMERA_OFFSET.z)),
     moveDir: new THREE.Vector3(0, 0, 1),
     dashDir: new THREE.Vector3(0, 0, 1),
     isInvulnerable() {
@@ -203,30 +213,87 @@ function createPlayer(heroId, scene, map) {
 }
 
 /**
- * Cámara tercera persona: detrás del jugador (offset CAMERA_OFFSET en su
- * espacio local), con clamp circular para no atravesar el muro del Coliseo.
+ * Cámara tercera persona: detrás del jugador (forward = +Z), con clamp al
+ * borde y push-out de obstáculos para que no atraviese la arena.
  * `snap` coloca la cámara directamente (primer frame); si es false, suaviza.
  */
 function updateCamera(dt, camera, player, map, snap = false) {
   if (!camera || !player) return;
   const arenaRadius = map && typeof map.radius === 'number' ? map.radius : 38;
   const p = player.group.position;
-  const desired = CAMERA_OFFSET.clone().applyAxisAngle(UP, player.group.rotation.y).add(p);
-  // Clamp: la cámara no sale de la arena (muro en arenaRadius)
-  const camMax = Math.max(arenaRadius - 0.6, 1);
-  const camR = Math.hypot(desired.x, desired.z);
-  if (camR > camMax) {
-    const s = camMax / camR;
-    desired.x *= s;
-    desired.z *= s;
-  }
+  const pitch = THREE.MathUtils.clamp(player.cameraPitch, CAMERA_MIN_PITCH, CAMERA_MAX_PITCH);
+  const distance = THREE.MathUtils.clamp(player.cameraDistance, CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE);
+  const horizontal = distance * Math.cos(pitch);
+  const yaw = player.group.rotation.y + player.cameraYaw;
+  const desired = new THREE.Vector3(
+    p.x - Math.sin(yaw) * horizontal,
+    p.y + CAMERA_TARGET_HEIGHT + distance * Math.sin(pitch),
+    p.z - Math.cos(yaw) * horizontal
+  );
+  const camMax = Math.max(arenaRadius - 0.8, 1);
+  clampCameraXZ(desired, camMax, map && map.obstacles);
   if (snap || !(dt > 0)) {
     camera.position.copy(desired);
   } else {
     camera.position.lerp(desired, 1 - Math.exp(-6 * dt));
   }
-  camera.lookAt(p.x, p.y + 1.3, p.z);
+  camera.lookAt(p.x, p.y + CAMERA_TARGET_HEIGHT, p.z);
 }
 
-export { createPlayer, updateCamera, clampToArena };
+function orbitCamera(player, deltaX, deltaY) {
+  if (!player) return;
+  const dx = Number(deltaX) || 0;
+  const dy = Number(deltaY) || 0;
+  player.cameraYaw = Math.atan2(
+    Math.sin(player.cameraYaw - dx * 0.004),
+    Math.cos(player.cameraYaw - dx * 0.004)
+  );
+  player.cameraPitch = THREE.MathUtils.clamp(
+    player.cameraPitch + dy * 0.003,
+    CAMERA_MIN_PITCH,
+    CAMERA_MAX_PITCH
+  );
+}
+
+function zoomCamera(player, deltaY) {
+  if (!player) return;
+  const direction = Math.sign(Number(deltaY) || 0);
+  player.cameraDistance = THREE.MathUtils.clamp(
+    player.cameraDistance + direction * 0.65,
+    CAMERA_MIN_DISTANCE,
+    CAMERA_MAX_DISTANCE
+  );
+}
+
+function clampCameraXZ(pos, maxRadius, obstacles) {
+  const r = Math.hypot(pos.x, pos.z);
+  if (r > maxRadius) {
+    const scale = maxRadius / r;
+    pos.x *= scale;
+    pos.z *= scale;
+  }
+  if (Array.isArray(obstacles)) {
+    for (const obstacle of obstacles) {
+      const dx = pos.x - obstacle.x;
+      const dz = pos.z - obstacle.z;
+      const distance = Math.hypot(dx, dz);
+      const minDistance = (obstacle.r || 0) + 0.45;
+      if (distance < minDistance) {
+        const inv = distance > 1e-5 ? 1 / distance : 0;
+        const nx = distance > 1e-5 ? dx * inv : 0;
+        const nz = distance > 1e-5 ? dz * inv : -1;
+        pos.x = obstacle.x + nx * minDistance;
+        pos.z = obstacle.z + nz * minDistance;
+      }
+    }
+    const correctedRadius = Math.hypot(pos.x, pos.z);
+    if (correctedRadius > maxRadius) {
+      const scale = maxRadius / correctedRadius;
+      pos.x *= scale;
+      pos.z *= scale;
+    }
+  }
+}
+
+export { createPlayer, updateCamera, orbitCamera, zoomCamera, clampToArena };
 export default createPlayer;

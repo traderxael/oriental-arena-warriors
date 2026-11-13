@@ -15,7 +15,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Assets } from './assets.js';
 import { Maps } from './maps.js';
 import { HEROES } from './heroes.js';
-import { createPlayer, updateCamera } from './player.js';
+import { createPlayer, updateCamera, orbitCamera, zoomCamera } from './player.js';
 import { Combat } from './combat.js';
 import { Enemies } from './enemies.js';
 import { Modes } from './modes.js';
@@ -65,6 +65,7 @@ const hitBursts = [];
 // Teclas de movimiento pulsadas (KeyW/A/S/D + flechas). Se traducen a
 // booleanos { forward, back, left, right } para player.update(dt, input, camera).
 const keys = new Set();
+let cameraPointerId = null;
 
 function readPlayerInput() {
   return {
@@ -274,7 +275,14 @@ function stopArena() {
   VFX.clearTransient();
   removePlayer();
   const canvas = document.getElementById('game-canvas');
-  if (canvas) canvas.classList.add('hidden');
+  if (canvas) {
+    if (cameraPointerId !== null && canvas.hasPointerCapture(cameraPointerId)) {
+      canvas.releasePointerCapture(cameraPointerId);
+    }
+    cameraPointerId = null;
+    canvas.classList.remove('camera-looking');
+    canvas.classList.add('hidden');
+  }
   const placeholder = document.querySelector('#hud .hud-placeholder');
   if (placeholder) placeholder.classList.remove('hidden');
 }
@@ -888,6 +896,39 @@ function bindUI() {
   // Clic izquierdo → ataque/combo (sólo en juego y con el jugador vivo)
   const canvas = document.getElementById('game-canvas');
   if (canvas) {
+    canvas.addEventListener('pointerdown', (event) => {
+      if (event.button !== 2 || state !== 'PLAY' || !arena || !arena.player || !arena.player.alive) return;
+      event.preventDefault();
+      cameraPointerId = event.pointerId;
+      canvas.classList.add('camera-looking');
+      canvas.setPointerCapture(event.pointerId);
+    });
+    canvas.addEventListener('pointermove', (event) => {
+      if (event.pointerId !== cameraPointerId || state !== 'PLAY' || !arena || !arena.player) return;
+      orbitCamera(arena.player, event.movementX, event.movementY);
+    });
+    const endCameraDrag = (event) => {
+      if (event.pointerId !== cameraPointerId) return;
+      cameraPointerId = null;
+      canvas.classList.remove('camera-looking');
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    };
+    canvas.addEventListener('pointerup', endCameraDrag);
+    canvas.addEventListener('pointercancel', endCameraDrag);
+    canvas.addEventListener('lostpointercapture', (event) => {
+      if (event.pointerId === cameraPointerId) {
+        cameraPointerId = null;
+        canvas.classList.remove('camera-looking');
+      }
+    });
+    canvas.addEventListener('contextmenu', (event) => {
+      if (state === 'PLAY') event.preventDefault();
+    });
+    canvas.addEventListener('wheel', (event) => {
+      if (state !== 'PLAY' || !arena || !arena.player || !arena.player.alive) return;
+      event.preventDefault();
+      zoomCamera(arena.player, event.deltaY);
+    }, { passive: false });
     canvas.addEventListener('mousedown', (event) => {
       if (event.button !== 0) return;
       if (state !== 'PLAY' || !arena || !arena.player || !arena.player.alive) return;

@@ -33,7 +33,8 @@ GitHub Pages sirve la raíz de `main` en [traderxael.github.io/oriental-arena-wa
 | --- | --- |
 | `W` `A` `S` `D` | Mover al guerrero |
 | `Shift` | Dash / esquiva |
-| Ratón | Apuntar / mirar |
+| Botón derecho + arrastrar | Girar la cámara alrededor del héroe |
+| Rueda del ratón | Acercar / alejar la cámara |
 | Clic izquierdo | Ataque / combo |
 | `Q` | Habilidad especial |
 | `Esc` | Pausa / reanudar |

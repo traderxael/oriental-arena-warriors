@@ -603,7 +603,10 @@ body {
   /* #hud lleva pointer-events:none para dejar pasar los clics a la arena;
      el propio canvas sí debe recibirlos (ratón apunta / ataca). */
   pointer-events: auto;
+  touch-action: none;
+  cursor: crosshair;
 }
+#game-canvas.camera-looking { cursor: grabbing; }
 
 .hud-top-left {
   position: absolute;
