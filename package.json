@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "node --test tests/logic.test.mjs"
+    "test": "node --test tests/logic.test.mjs",
+    "test:e2e": "node tests/e2e/run-all.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.65.0"
   }
 }

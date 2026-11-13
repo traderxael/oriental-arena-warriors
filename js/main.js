@@ -334,8 +334,26 @@ const STRESS_ROSTER = [
   'brute',
 ];
 
+let stressPrewarmed = false;
+let stressPrewarming = false;
+
 function topUpStressEnemies() {
   if (!arena) return;
+  if (!stressPrewarmed) {
+    if (!stressPrewarming) {
+      stressPrewarming = true;
+      const heroPath = 'assets/characters/' + (selectedHeroId === 'goro' ? 'goro' : 'akane') + '.glb';
+      Promise.all([
+        Assets.loadGLTF(heroPath, () => new THREE.Group()),
+        Assets.loadGLTF('assets/characters/ashigaru.glb', () => new THREE.Group()),
+        Assets.loadGLTF('assets/characters/oni.glb', () => new THREE.Group()),
+      ]).then(() => {
+        stressPrewarmed = true;
+        topUpStressEnemies();
+      });
+    }
+    return;
+  }
   let idx = enemies.length;
   while (enemies.length < 25) {
     const type = STRESS_ROSTER[idx % STRESS_ROSTER.length];

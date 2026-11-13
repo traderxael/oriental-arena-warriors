@@ -1,0 +1,39 @@
+{
+  "timestamp": "2026-11-13T14:27:11.152Z",
+  "stress25Baja": {
+    "fps": 1,
+    "avgMs": 1000,
+    "p95": 1000,
+    "calls": 70,
+    "triangles": 281152,
+    "memory": {
+      "geometries": 31,
+      "textures": 43,
+      "textureMB": 41.02
+    },
+    "mixers": 26,
+    "enemies": 25,
+    "quality": "baja",
+    "autoDowngrades": 0
+  },
+  "stress25Alta": {
+    "fps": 1,
+    "avgMs": 1000,
+    "p95": 1000,
+    "calls": 136,
+    "triangles": 340904,
+    "memory": {
+      "geometries": 40,
+      "textures": 56,
+      "textureMB": 41.02
+    },
+    "mixers": 26,
+    "enemies": 25,
+    "quality": "alta",
+    "autoDowngrades": 0
+  },
+  "autoGuard": {
+    "level": "media",
+    "downgrades": 1
+  }
+}
