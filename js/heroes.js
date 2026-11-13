@@ -1,8 +1,8 @@
 /* ============================================================
-   heroes.js — Héroes jugables: Akane y Goro
+   heroes.js — Héroes jugables: Akane, Goro y Tsuki
 
    Interfaz pública:
-     HEROES            — array con los 2 héroes completos:
+     HEROES            — array con los 3 héroes completos:
                          { id, name, theme, weapon, story, epithet, desc,
                            kanji, stats: { hp, speed, damage, range,
                                            comboWindow, fuerza, velocidad,
@@ -12,6 +12,7 @@
                            builder }
      buildAkane()      — THREE.Group procedural (~1.8 m), castShadow
      buildGoro()       — idem, más ancho, armadura azul/acero
+     buildTsuki()      — conejo samurái procedural con armadura jade
 
    Arma: si existe assets/props/katana.glb se carga vía Assets.loadGLB
    (que nunca rechaza: cae a la katana/odachi procedural) y sustituye
@@ -346,6 +347,88 @@ function buildGoro() {
   return g;
 }
 
+/** Conejo samurái con armadura jade, pañuelo bermellón y wakizashi. */
+function buildTsuki() {
+  const g = new THREE.Group();
+  g.name = 'hero:tsuki';
+
+  const C = {
+    fur: '#e5ddc9', furLight: '#f5eddf', ear: '#bd7770',
+    jade: '#32665a', jadeDark: '#20473f', black: '#262923',
+    gold: '#d4af37', red: '#a0342c', skin: '#dfb9a1', sandal: '#756147',
+  };
+
+  // Hakama, grebas y torso de samurái, en la misma escala que Akane.
+  g.add(buildLegs(0.72, 0.09, C.black, C.sandal));
+  const torsoY = 1.02;
+  g.add(buildTorso(C.jade, 0.21, 0.28, 0.56, torsoY));
+  const cuirass = mesh(new THREE.BoxGeometry(0.34, 0.34, 0.07), C.jadeDark, { roughness: 0.58, metalness: 0.22 });
+  cuirass.position.set(0, torsoY + 0.02, 0.225);
+  const crest = mesh(new THREE.SphereGeometry(0.055, 8, 6), C.gold, { roughness: 0.35, metalness: 0.7 });
+  crest.scale.set(1, 1.25, 0.25);
+  crest.position.set(0, torsoY + 0.04, 0.27);
+  const obi = mesh(new THREE.CylinderGeometry(0.275, 0.29, 0.09, 12), C.red, { roughness: 0.72 });
+  obi.position.y = 0.75;
+  g.add(cuirass, crest, obi);
+
+  // Placas pequeñas para que conserve la silueta de guerrero del elenco.
+  [-1, 1].forEach((side) => {
+    const sode = mesh(new THREE.BoxGeometry(0.14, 0.24, 0.25), C.jadeDark, { roughness: 0.62 });
+    sode.position.set(side * 0.29, 1.23, 0);
+    sode.rotation.z = side * 0.16;
+    const sleeve = mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.3, 8), C.jade, { roughness: 0.72 });
+    sleeve.position.set(side * 0.32, 1.12, 0);
+    sleeve.rotation.z = side * 0.24;
+    const forearm = mesh(new THREE.CylinderGeometry(0.05, 0.058, 0.25, 8), C.fur);
+    forearm.position.set(side * 0.39, 0.89, 0.04);
+    forearm.rotation.z = side * 0.14;
+    g.add(sode, sleeve, forearm);
+  });
+
+  // Cabeza de conejo: hocico, ojos y bigotes al frente (+Z).
+  const head = mesh(new THREE.SphereGeometry(0.16, 14, 12), C.furLight, { roughness: 0.78 });
+  head.scale.set(1.04, 0.96, 0.92);
+  head.position.set(0, 1.43, 0.015);
+  g.add(head);
+  const muzzle = mesh(new THREE.SphereGeometry(0.055, 10, 8), C.fur, { roughness: 0.82 });
+  muzzle.scale.set(1.35, 0.72, 0.75);
+  muzzle.position.set(0, 1.39, 0.15);
+  const nose = mesh(new THREE.SphereGeometry(0.025, 8, 6), C.ear, { roughness: 0.68 });
+  nose.scale.set(1.15, 0.72, 0.7);
+  nose.position.set(0, 1.43, 0.2);
+  g.add(muzzle, nose);
+  [-1, 1].forEach((side) => {
+    const eye = mesh(new THREE.SphereGeometry(0.022, 8, 6), C.black, { roughness: 0.34 });
+    eye.position.set(side * 0.075, 1.47, 0.145);
+    const whisker = mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.16, 6), '#b9ad99', { roughness: 0.9 });
+    whisker.rotation.z = Math.PI / 2;
+    whisker.position.set(side * 0.13, 1.385, 0.15);
+    g.add(eye, whisker);
+  });
+
+  // Orejas largas con interior rosado y una pequeña cola redonda.
+  [-1, 1].forEach((side) => {
+    const ear = mesh(new THREE.SphereGeometry(0.09, 12, 10), C.furLight, { roughness: 0.82 });
+    ear.scale.set(0.68, 2.35, 0.55);
+    ear.position.set(side * 0.095, 1.77, -0.015);
+    ear.rotation.z = -side * 0.13;
+    const inner = mesh(new THREE.SphereGeometry(0.06, 10, 8), C.ear, { roughness: 0.86 });
+    inner.scale.set(0.42, 1.8, 0.22);
+    inner.position.set(side * 0.095, 1.77, 0.036);
+    inner.rotation.z = -side * 0.13;
+    g.add(ear, inner);
+  });
+  const tail = mesh(new THREE.SphereGeometry(0.085, 10, 8), C.furLight, { roughness: 0.85 });
+  tail.position.set(0, 0.76, -0.28);
+  g.add(tail);
+
+  const weapon = createWeaponPivot(0.82, 0.41, 0.93, 0.08, -0.62);
+  g.add(weapon);
+  g.traverse((n) => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
+  attachWeaponGLB(g, 0.82);
+  return g;
+}
+
 /* ---------- HEROES ---------- */
 
 const HEROES = [
@@ -385,9 +468,27 @@ const HEROES = [
     colors: { primary: '#3f4f63', secondary: '#1a1a1a', accent: '#d4af37', skin: '#d9a97c' },
     builder: buildGoro,
   },
+  {
+    id: 'tsuki',
+    name: 'Tsuki',
+    theme: 'Samurái',
+    weapon: 'Wakizashi',
+    epithet: 'El Conejo de la Luna',
+    desc: 'El wakizashi tiene poco alcance, pero su paso es el más veloz de la arena.',
+    kanji: '兎',
+    story: 'Tsuki custodia el sendero de los cerezos bajo la luna. Sus orejas oyen el acero antes de que brille; entra, corta y desaparece entre los pétalos antes del contraataque.',
+    stats: { hp: 95, speed: 6.8, damage: 16, range: 2.35, comboWindow: 0.52, fuerza: 60, velocidad: 96, defensa: 50 },
+    special: {
+      name: 'Corte Creciente',
+      cooldown: 8,
+      desc: 'Corte veloz en línea de 5,2 m que daña a todos los rivales en su trayectoria.',
+    },
+    colors: { primary: '#32665a', secondary: '#262923', accent: '#d4af37', skin: '#e5ddc9' },
+    builder: buildTsuki,
+  },
 ];
 
-export { HEROES, buildAkane, buildGoro };
+export { HEROES, buildAkane, buildGoro, buildTsuki };
 export default HEROES;
 
 // Acceso global de sólo lectura para depuración.

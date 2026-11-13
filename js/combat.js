@@ -7,7 +7,7 @@
        (hero.stats.comboWindow); el 4º golpe vuelve a empezar en 1.
        Hitbox = Logic.inArc con `range` del héroe y arco frontal de
        100° (ARC_RAD). Daño = Logic.comboDamage(damage, comboStep)
-       (18/21/25 Akane · 34/39/48 Goro). Golpea a enemigos vivos con
+       (18/21/25 Akane · 34/39/48 Goro, escalado por arma y héroe). Golpea a enemigos vivos con
        `takeDamage(n)` (fallback: resta de `hp`). Dispara el evento
        `combat:hit` por cada impacto (partículas/floaters en main.js).
      Combat.trySpecial(player, enemies, now) -> boolean
@@ -15,6 +15,8 @@
        delante, 60 daño a todos los que estén en ella.
        Goro «Tajo Giratorio»: 360° radio 3.5 m, 50 daño + knockback
        de 2.5 m (empujón inmediato en XZ, limitado al radio de la arena).
+       Tsuki «Corte Creciente»: línea rectilínea de 5.2 m delante,
+       42 daño a todos los rivales en ella.
        Cooldown por héroe (hero.special.cooldown). Devuelve false si
        está en cooldown o el jugador está muerto.
      Combat.updateSpecialHud(player, now) — refresca #hud-special
@@ -35,6 +37,9 @@ const ARC_RAD = (100 * Math.PI) / 180; // arco frontal del ataque básico (100°
 const AKANE_LINE_DAMAGE = 60;
 const AKANE_LINE_RANGE = 8;            // m de alcance rectilíneo
 const AKANE_LINE_HALF_WIDTH = 1.0;     // m a cada lado del eje (línea con grosor)
+const TSUKI_LINE_DAMAGE = 42;
+const TSUKI_LINE_RANGE = 5.2;
+const TSUKI_LINE_HALF_WIDTH = 0.85;
 const GORO_SPIN_DAMAGE = 50;
 const GORO_SPIN_RADIUS = 3.5;          // m, 360°
 const GORO_KNOCKBACK = 2.5;            // m de empujón inmediato
@@ -149,7 +154,7 @@ function tryAttack(player, enemies, now) {
 
 /**
  * Especial (Q). Devuelve true si se ejecutó, false si está en cooldown/muerto.
- * Akane: línea de 8 m al frente · Goro: giro 360° radio 3.5 m + knockback.
+ * Akane: línea de 8 m al frente · Goro: giro 360° con knockback · Tsuki: línea corta de 5.2 m.
  */
 function trySpecial(player, enemies, now) {
   if (!player || !player.alive || !player.hero) return false;
@@ -162,6 +167,7 @@ function trySpecial(player, enemies, now) {
   const fwd = forwardXZ(facing);
   const origin = player.group.position;
   const isGoro = player.hero.id === 'goro';
+  const isTsuki = player.hero.id === 'tsuki';
 
   player.specialCooldownUntil = t + cooldown;
   player.swingStart = t;
@@ -176,13 +182,16 @@ function trySpecial(player, enemies, now) {
     if (isGoro) {
       hit = dist <= GORO_SPIN_RADIUS;
     } else {
-      // Componente a lo largo y a lo ancho de la línea (rectángulo 8 × 2 m)
+      // Componente a lo largo y a lo ancho de la línea frontal de cada héroe.
       const along = dx * fwd.x + dz * fwd.z;
       const perp = Math.abs(dx * fwd.z - dz * fwd.x);
-      hit = along >= 0 && along <= AKANE_LINE_RANGE && perp <= AKANE_LINE_HALF_WIDTH;
+      const lineRange = isTsuki ? TSUKI_LINE_RANGE : AKANE_LINE_RANGE;
+      const halfWidth = isTsuki ? TSUKI_LINE_HALF_WIDTH : AKANE_LINE_HALF_WIDTH;
+      hit = along >= 0 && along <= lineRange && perp <= halfWidth;
     }
     if (!hit) continue;
-    const damage = Math.round((isGoro ? GORO_SPIN_DAMAGE : AKANE_LINE_DAMAGE) * (player.damageMult || 1));
+    const baseDamage = isGoro ? GORO_SPIN_DAMAGE : (isTsuki ? TSUKI_LINE_DAMAGE : AKANE_LINE_DAMAGE);
+    const damage = Math.round(baseDamage * (player.damageMult || 1));
     const { killed } = dealDamage(enemy, damage);
     if (isGoro && dist > 1e-4) {
       // Empujón radial desde el jugador, limitado al borde de la arena
@@ -339,6 +348,8 @@ export const Combat = {
   ARC_RAD,
   AKANE_LINE_DAMAGE,
   AKANE_LINE_RANGE,
+  TSUKI_LINE_DAMAGE,
+  TSUKI_LINE_RANGE,
   GORO_SPIN_DAMAGE,
   GORO_SPIN_RADIUS,
   FLOATER_CAP,
