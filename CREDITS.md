@@ -32,7 +32,7 @@ falla o tarda más de 8 s en cargar, el juego usa un builder procedural equivale
 - Título: Katana
 - Fuente (URL): https://poly.pizza/m/15A7InejC7 — https://static.poly.pizza/3ea3ea0b-6eba-4809-af0a-c8aea9220f7f.glb
 - Licencia: Public Domain (CC0) — https://creativecommons.org/publicdomain/zero/1.0/
-- Cambios realizados: ninguno (reservada para armas/personajes; aún no se instancia en escena)
+- Cambios realizados: ninguno (se usa como arma de los héroes; el builder procedural queda como fallback)
 
 ### Cherry tree (assets/props/cherry-tree.glb)
 - Autor: Poly by Google
@@ -64,6 +64,10 @@ Coste en créditos Rodin: 4.0 de un tope de 12 (4 generaciones × 0.5 + 4 rigs �
 Las armas siguen siendo procedurales / `assets/props/katana.glb`.
 Si un GLB de personaje falta o falla, el juego usa el builder procedural
 equivalente de `js/heroes.js` / `js/enemies.js` (fallback siempre jugable).
+
+### Tsuki — conejo samurái
+
+Tsuki está modelado proceduralmente en `js/heroes.js` con geometría básica de Three.js: pelaje claro, orejas rosadas, armadura jade, obi bermellón y cola. No usa un modelo externo. Su wakizashi reutiliza `assets/props/katana.glb`, con arma procedural si ese archivo no carga.
 
 Política de assets del proyecto: sólo se commitean assets bajo `assets/` con licencia CC0 o atribución registrada aquí. Si la descarga de un asset falla en cualquier momento, el juego cae a un builder 100% procedural y funciona igualmente.
 

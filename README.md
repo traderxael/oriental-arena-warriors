@@ -1,56 +1,51 @@
 # Oriental Arena Warriors
 
-Juego web 3D (Three.js) de peleas contra hordas en una arena con temática oriental: samuráis, artes marciales y cultivadores.
+Juego de combate 3D para navegador, hecho con Three.js r160 y servido como sitio estático. La interfaz está en español y el arte combina samuráis low-poly, piedra, laca roja y oro.
 
-## Qué es
+## Estado actual
 
-Oriental Arena Warriors es un juego de navegador, sin paso de compilación: la página se sirve tal cual como sitio estático. Combate por oleadas en una arena 3D, con héroes seleccionables y una estética de papel, lacre y oro.
+- Tres guerreros seleccionables: Akane, Goro y Tsuki, un conejo samurái con armadura jade y wakizashi.
+- Tres modos jugables en el Coliseo del Sol Naciente: Hordas, Supervivencia por oleadas con power-ups y Duelo contra el Maestro.
+- Arena con cielo y texturas procedurales, árboles de cerezo, columnas, pétalos, estelas de dash, partículas y bloom.
+- Modelos GLB riggeados para Akane, Goro y enemigos. Tsuki usa un builder procedural y sigue disponible sin descargas de personaje.
+- Calidad Alta, Media y Baja; se puede fijar con `?quality=alta`, `?quality=media` o `?quality=baja`.
 
-## Estado del proyecto
+## Verificación local
 
-MVP implementado: flujo título → modo → héroe (Akane y Goro) → arena → HUD → resultados → reintentar. Modo Hordas infinito con oleadas acotadas (máximo 25 enemigos vivos), Coliseo del Sol Naciente 3D y fallback procedural si un GLB falta. Verificado durante el desarrollo: `node --test` 28/28 y verificación headless (Playwright, Chromium) de cada sistema; pendiente: una pasada E2E en un navegador real con GPU. Los modos «Próximamente» (Supervivencia, Duelo) y las arenas (Templo, Pagoda, Jardines) llegarán en la Fase 1.
+```bash
+npm test
+npm run test:e2e
+```
 
-## Motor 3D
+La suite E2E usa Chromium headless con SwiftShader y guarda capturas en `tests/e2e/shots/`. El 13 de noviembre de 2026 pasaron 53 tests unitarios y las 5 suites E2E; la prueba no sustituye una verificación en una GPU física.
 
-Three.js se carga desde CDN fijado a **r160** como módulos ES con import map en `index.html` (`https://unpkg.com/three@0.160.0/build/three.module.js` y `three/addons/` para GLTFLoader, misma versión). Si unpkg deja de funcionar, index.html documenta el espejo equivalente de jsDelivr. Si el motor no carga o el navegador no soporta WebGL, la página muestra un mensaje de error en español en lugar de una pantalla negra. Los GLB de `assets/props/` caen al builder procedural automáticamente si faltan, fallan o tardan más de 8 s en cargar.
+## Motor y publicación
 
-## GitHub Pages
+Three.js se carga desde el CDN fijado a r160 en `index.html`, con un espejo jsDelivr documentado. El motor y WebGL deben estar disponibles para jugar; si falta un GLB, el personaje o prop correspondiente usa su builder procedural.
 
-El sitio está publicado y sirve el juego (verificado: la página carga el shell y los menús completos) en:
-
-**https://traderxael.github.io/oriental-arena-warriors/**
-
-Servido como sitio estático desde `main` (raíz `/`), sin workflow de build. Todos los assets se referencian con rutas relativas (`assets/...`). El motor (Three.js r160 desde CDN en tu navegador) se carga en tiempo de ejecución; si unpkg falla, usá el espejo jsDelivr documentado en `index.html` o serví el repo localmente.
+GitHub Pages sirve la raíz de `main` en [traderxael.github.io/oriental-arena-warriors](https://traderxael.github.io/oriental-arena-warriors/). Los cambios locales de esta rama requieren un push aprobado para aparecer en el sitio publicado.
 
 ## Controles
 
-| Tecla / acción      | Función                     |
-| ------------------- | --------------------------- |
-| `W` `A` `S` `D`     | Mover al guerrero           |
-| `Shift`             | Dash / esquiva              |
-| Ratón               | Apuntar / mirar             |
-| Clic izquierdo      | Ataque / combo              |
-| `Q`                 | Habilidad especial          |
-| `Esc`               | Pausa / reanudar            |
+| Tecla / acción | Función |
+| --- | --- |
+| `W` `A` `S` `D` | Mover al guerrero |
+| `Shift` | Dash / esquiva |
+| Ratón | Apuntar / mirar |
+| Clic izquierdo | Ataque / combo |
+| `Q` | Habilidad especial |
+| `Esc` | Pausa / reanudar |
 
-Sólo escritorio con teclado y ratón (sin táctil). La interfaz está en español.
+## Servir localmente
 
-## Cómo servir localmente
-
-No hay build. Sirve el repo como sitio estático desde la raíz:
+No hay paso de compilación. Desde la raíz del proyecto ejecuta:
 
 ```bash
-# Opción 1: Python
 python -m http.server 8000
-
-# Opción 2: Node
-npx serve .
 ```
 
-Luego abre <http://localhost:8000> en el navegador.
-
-> Abrir `index.html` con doble clic (`file://`) **no** está soportado: los navegadores bloquean la carga de recursos bajo `file://`. Usa siempre un servidor estático.
+Abre <http://localhost:8000>. No abras `index.html` con `file://`: el navegador debe servir la página por HTTP.
 
 ## Créditos
 
-Ver [CREDITS.md](CREDITS.md).
+Consulta [CREDITS.md](CREDITS.md) para la procedencia y licencias de los assets.
